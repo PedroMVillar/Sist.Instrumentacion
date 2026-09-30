@@ -1,0 +1,80 @@
+# Claude Code (nunca versionado)
+.claude/
+.claude-*
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+.superpowers/
+
+# ------------------------------------------------------------------
+# Politica de fuentes
+#
+# A diferencia de los repos de materias teoricas, aca el .tex de los
+# informes SI se versiona: son pocos, llevan diagramas TikZ escritos a
+# mano y perder la fuente no es recuperable desde el PDF.
+# ------------------------------------------------------------------
+
+# Artefactos de compilacion LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.xdv
+
+# ------------------------------------------------------------------
+# Vivado
+#
+# Del proyecto solo se versionan los fuentes (.sv y .xdc) y el reporte
+# de utilizacion citado en el informe. Todo lo demas lo regenera la
+# herramienta a partir de ellos.
+# ------------------------------------------------------------------
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.xpr
+*.jou
+*.str
+*.bit
+*.dcp
+.Xil/
+vivado_pid*.str
+hs_err_pid*.log
+
+# Excepcion: el Utilization Report que respalda la tabla del informe
+!**/informe/*utilization*.rpt
+
+# ------------------------------------------------------------------
+# STM32CubeIDE
+# ------------------------------------------------------------------
+Debug/
+Release/
+.metadata/
+.settings/
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.map
+*.list
+*.hex
+*.bin
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
