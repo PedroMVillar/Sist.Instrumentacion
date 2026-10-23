@@ -28,6 +28,8 @@ Cada rama es: **pin → resistencia → pata larga del LED (ánodo) → pata cor
 
 ## CubeMX, paso a paso
 
+> El proyecto **ya está generado** en `firmware/` con exactamente esta configuración (el archivo `firmware/firmware.ioc` se puede abrir en CubeMX para verla o modificarla). Los pasos quedan documentados para saber de dónde salió cada cosa.
+
 1. **New Project → Board Selector**, buscar `NUCLEO-F411RE`, **Start Project**. Cuando pregunta *"Initialize all peripherals with their default Mode?"* → **No**.
 
 2. **Pinout & Configuration** — clic en cada pin del dibujo del chip y asignar:
@@ -62,6 +64,21 @@ Cada rama es: **pin → resistencia → pata larga del LED (ánodo) → pata cor
 
 6. **GENERATE CODE**.
 
-## Después de generar
+## Compilar y grabar desde VS Code
 
-Con el proyecto generado se compila y graba desde VS Code (extensiones **CMake Tools** y **Cortex-Debug**, compilador `arm-none-eabi-gcc` y OpenOCD ya instalados). La configuración de build y grabado está en el propio proyecto (`firmware/`).
+1. Abrir **la carpeta `firmware/`** en VS Code (no el repo entero) y aceptar las extensiones recomendadas (CMake Tools, Cortex-Debug, C/C++).
+2. Conectar la placa por USB.
+3. `Ctrl+Shift+P` → *Tasks: Run Task*:
+   - **Elegir desafío y configurar** — pregunta qué desafío (1 a 6) y configura CMake.
+   - **Compilar** — también con `Ctrl+Shift+B`.
+   - **Grabar en la placa** — compila y graba por OpenOCD; al terminar el programa arranca solo.
+
+También se puede debuggear (puntos de interrupción, ver variables) con F5 → *Debug en la placa (OpenOCD)*.
+
+Lo mismo desde la terminal, parado en `firmware/`:
+
+```
+cmake --preset Debug -DDESAFIO=3        # elegir desafío
+cmake --build build/Debug               # compilar
+openocd -f interface/stlink.cfg -f target/stm32f4x.cfg -c "program build/Debug/firmware.elf verify reset exit"
+```

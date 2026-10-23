@@ -78,3 +78,8 @@ Thumbs.db
 desktop.ini
 *.swp
 *~
+
+# ------------------------------------------------------------------
+# STM32 con CMake (lab 2): el build se regenera, no se versiona
+# ------------------------------------------------------------------
+laboratorio-2-concurrencia-stm32/firmware/build/
