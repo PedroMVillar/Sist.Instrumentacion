@@ -5,6 +5,7 @@
 ![Materia](https://img.shields.io/badge/Sistemas_Electr%C3%B3nicos_de_Instrumentaci%C3%B3n-LCC_%C2%B7_FaMAF_UNC-1f4e79?style=flat-square)
 ![Laboratorio 1](https://img.shields.io/badge/lab_1-entregado-2ea44f?style=flat-square)
 ![Laboratorio 2](https://img.shields.io/badge/lab_2-en_desarrollo-d4a72c?style=flat-square)
+![Laboratorio 3](https://img.shields.io/badge/lab_3-sin_empezar-6e7781?style=flat-square)
 ![SystemVerilog](https://img.shields.io/badge/SystemVerilog-Vivado_2024.2-008080?style=flat-square)
 
 </div>
@@ -19,6 +20,7 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 |---|---|---|---|
 | **[1 — Frecuencímetro sobre FPGA](./laboratorio-1-frecuencimetro-fpga)** | Boolean Board · Spartan-7 `xc7s50csga324-1` | Entregado | 7 módulos SystemVerilog, restricciones y informe |
 | **[2 — Concurrencia sobre STM32](./laboratorio-2-concurrencia-stm32)** | NUCLEO-F411RE · VS Code + CMake (HAL) | En desarrollo | 6 desafíos de complejidad ascendente, setup y explicaciones |
+| **[3 — Sensores y librerías](./laboratorio-3-sensores-librerias)** | STM32 · VS Code + CMake (HAL) | Sin empezar | Consigna: HC-SR04, LM35, acelerómetro SPI y super-loop integrador |
 
 ## Teoría
 
@@ -73,14 +75,18 @@ Sistemas Electronicos de Instrumentacion/
 │       ├── foto_medicion.jpg / foto_generador.jpg / foto_displays.jpg
 │       ├── Frequency_meter_utilization_placed.rpt
 │       └── reporte_utilizacion.tcl
-└── laboratorio-2-concurrencia-stm32/
+├── laboratorio-2-concurrencia-stm32/
+│   ├── README.md
+│   ├── consigna/
+│   │   └── guia-laboratorio-stm32.pdf
+│   ├── setup.md                 cableado y configuración de CubeMX
+│   ├── explicacion.md           explicación de cada desafío
+│   └── firmware/                proyecto CubeMX + CMake
+│       └── desafios/            un .c autocontenido por desafío
+└── laboratorio-3-sensores-librerias/
     ├── README.md
-    ├── consigna/
-    │   └── guia-laboratorio-stm32.pdf
-    ├── setup.md                 cableado y configuración de CubeMX
-    ├── explicacion.md           explicación de cada desafío
-    └── firmware/                proyecto CubeMX + CMake
-        └── desafios/            un .c autocontenido por desafío
+    └── consigna/
+        └── GuiaLab3_Sensores.pdf
 ```
 
 </details>
