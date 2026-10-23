@@ -33,5 +33,5 @@ Serie de seis desafíos de complejidad ascendente sobre el camino que va de la p
 |---|---|
 | [`consigna/`](./consigna) | Guía oficial de la cátedra |
 | [`setup.md`](./setup.md) | Cableado y configuración de CubeMX, paso a paso |
-| `firmware/` | Proyecto CubeMX + CMake; los desafíos van en `firmware/desafios/` |
-| `explicacion.md` | Explicación de cada desafío, para estudiar |
+| [`firmware/`](./firmware) | Proyecto CubeMX + CMake; los desafíos están en [`firmware/desafios/`](./firmware/desafios) |
+| [`explicacion.md`](./explicacion.md) | Explicación de cada desafío, para estudiar |
