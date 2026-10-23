@@ -37,6 +37,19 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+# --- Desafíos del laboratorio --------------------------------------------
+# Se compila UN desafío por vez. Se elige así:
+#     cmake --preset Debug -DDESAFIO=3
+set(DESAFIO 1 CACHE STRING "Desafío a compilar (1 a 4)")
+message("Desafío a compilar: " ${DESAFIO})
+
+# Cada desafío trae su propio main(), así que sacamos de la lista de
+# fuentes el main.c que genera CubeMX (queda en Core/Src solo de referencia).
+get_target_property(FUENTES ${CMAKE_PROJECT_NAME} SOURCES)
+list(FILTER FUENTES EXCLUDE REGEX "Core/Src/main\\.c$")
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOURCES "${FUENTES}")
+# --------------------------------------------------------------------------
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -44,12 +57,16 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    # El desafío elegido (ver opción DESAFIO más arriba)
+    desafios/desafio${DESAFIO}.c
+    # Librerías: HC_SR04 (de la cátedra) y lm35 (propia)
+    libs/HC_SR04.c
+    libs/lm35.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
+    libs
 )
 
 # Add project symbols (macros)
