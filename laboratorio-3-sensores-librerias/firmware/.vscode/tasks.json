@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Elegir desafío y configurar",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "Debug", "-DDESAFIO=${input:desafio}"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Compilar",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build/Debug"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Grabar en la placa",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/stlink.cfg",
+                "-f", "target/stm32f4x.cfg",
+                "-c", "program build/Debug/firmware.elf verify reset exit"
+            ],
+            "dependsOn": "Compilar",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "desafio",
+            "type": "pickString",
+            "description": "¿Qué desafío compilar?",
+            "options": ["1", "2", "3", "4"],
+            "default": "1"
+        }
+    ]
+}

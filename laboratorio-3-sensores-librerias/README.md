@@ -2,7 +2,18 @@
 
 Cuatro desafíos sobre adquisición de datos del entorno: integrar una librería de terceros, escribir una librería propia multi-instancia, medir el costo de bloquear el procesador y cerrar con un super-loop disparado por tiempo que atiende tres sensores a la vez.
 
-> Estado: en preparación. Por ahora solo está la consigna.
+**Placa:** STM32F4Discovery (F407VG, prestada por la cátedra) · **Entorno:** VS Code + CMake (librerías HAL Cube)
+
+> El cableado de los sensores y la configuración del proyecto están en [`setup.md`](./setup.md).
+
+## Hardware
+
+| Elemento | Pin | Dónde |
+|---|---|---|
+| LEDs verde / naranja / rojo / azul | `PD12` / `PD13` / `PD14` / `PD15` | En la placa |
+| Acelerómetro LIS3DSH | SPI1 (`PA5/PA6/PA7`) + CS `PE3` | En la placa |
+| HC-SR04 (distancia) | TRIG `PA2` · ECHO `PA1` (TIM2 CH2) | Externo, en protoboard |
+| LM35 (temperatura) | OUT `PC1` (ADC1 canal 11) | Externo, en protoboard |
 
 ## Desafíos
 
@@ -18,3 +29,7 @@ Cuatro desafíos sobre adquisición de datos del entorno: integrar una librería
 | | Qué contiene |
 |---|---|
 | [`consigna/`](./consigna) | Guía oficial de la cátedra |
+| [`setup.md`](./setup.md) | Cableado de los sensores y configuración del proyecto |
+| [`firmware/`](./firmware) | Proyecto CubeMX + CMake; los desafíos van en `firmware/desafios/` |
+| [`firmware/libs/`](./firmware/libs) | `HC_SR04` (provista por la cátedra, sin modificar) y `lm35` (propia, del desafío 2) |
+| `explicacion.md` | Explicación de cada desafío, para estudiar |
