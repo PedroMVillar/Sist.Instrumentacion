@@ -4,7 +4,7 @@
 
 ![Materia](https://img.shields.io/badge/Sistemas_Electr%C3%B3nicos_de_Instrumentaci%C3%B3n-LCC_%C2%B7_FaMAF_UNC-1f4e79?style=flat-square)
 ![Laboratorio 1](https://img.shields.io/badge/lab_1-entregado-2ea44f?style=flat-square)
-![Laboratorio 2](https://img.shields.io/badge/lab_2-sin_empezar-6e7781?style=flat-square)
+![Laboratorio 2](https://img.shields.io/badge/lab_2-en_desarrollo-d4a72c?style=flat-square)
 ![SystemVerilog](https://img.shields.io/badge/SystemVerilog-Vivado_2024.2-008080?style=flat-square)
 
 </div>
@@ -18,7 +18,7 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 | | Plataforma | Estado | Contenido |
 |---|---|---|---|
 | **[1 — Frecuencímetro sobre FPGA](./laboratorio-1-frecuencimetro-fpga)** | Boolean Board · Spartan-7 `xc7s50csga324-1` | Entregado | 7 módulos SystemVerilog, restricciones y informe |
-| **[2 — Concurrencia sobre STM32](./laboratorio-2-concurrencia-stm32)** | STM32F411E-DISCO · CubeIDE (HAL) | Sin empezar | Consigna: 6 desafíos de complejidad ascendente |
+| **[2 — Concurrencia sobre STM32](./laboratorio-2-concurrencia-stm32)** | NUCLEO-F411RE · VS Code + CMake (HAL) | En desarrollo | 6 desafíos de complejidad ascendente, setup y explicaciones |
 
 ## Teoría
 
@@ -37,14 +37,13 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 
 ## Convención de carpetas
 
-La misma estructura se repite en cada laboratorio:
-
 | Carpeta | Qué contiene |
 |---|---|
 | `consigna/` | Guía oficial de la cátedra |
-| `src/` | Código propio, listo para sintetizar o compilar |
-| `src-catedra/` | Esqueleto y módulos provistos, sin modificar |
-| `informe/` | Fuente LaTeX, PDF entregado y evidencia de la medición |
+| `src/` | Código propio, listo para sintetizar (lab 1) |
+| `src-catedra/` | Esqueleto y módulos provistos, sin modificar (lab 1) |
+| `informe/` | Fuente LaTeX, PDF entregado y evidencia de la medición (lab 1) |
+| `firmware/` | Proyecto CubeMX + CMake con los desafíos (lab 2) |
 
 <details>
 <summary><b>Árbol completo del repositorio</b></summary>
@@ -78,7 +77,10 @@ Sistemas Electronicos de Instrumentacion/
     ├── README.md
     ├── consigna/
     │   └── guia-laboratorio-stm32.pdf
-    └── src/
+    ├── setup.md                 cableado y configuración de CubeMX
+    ├── explicacion.md           explicación de cada desafío
+    └── firmware/                proyecto CubeMX + CMake
+        └── desafios/            un .c autocontenido por desafío
 ```
 
 </details>

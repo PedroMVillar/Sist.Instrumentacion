@@ -2,19 +2,19 @@
 
 Serie de seis desafíos de complejidad ascendente sobre el camino que va de la programación secuencial y bloqueante a la concurrencia cooperativa y preemptiva.
 
-**Plataforma:** STM32F411E-DISCO · **Entorno:** STM32CubeIDE (librerías HAL Cube)
+**Placa:** NUCLEO-F411RE · **Entorno:** VS Code + CMake (librerías HAL Cube)
 
-> Estado: sin empezar. Por ahora solo está la consigna.
+> La guía original asume la F411E-DISCO; el mapeo de pines adaptado, el cableado de los LEDs externos y la configuración de CubeMX están en [`setup.md`](./setup.md).
 
 ## Hardware
 
-| Elemento | Pin |
-|---|---|
-| Botón de usuario | `PA0` (activo en alto) |
-| LED verde | `PD12` |
-| LED naranja | `PD13` |
-| LED rojo | `PD14` |
-| LED azul | `PD15` |
+| Elemento | Pin | Dónde |
+|---|---|---|
+| Botón de usuario | `PC13` (activo en bajo) | En la placa (B1) |
+| LED verde | `PA5` | En la placa (LD2) |
+| LED naranja | `PA6` (D12) | Externo, en protoboard |
+| LED rojo | `PA7` (D11) | Externo, en protoboard |
+| LED azul | `PB6` (D10) | Externo, en protoboard |
 
 ## Desafíos
 
@@ -27,4 +27,11 @@ Serie de seis desafíos de complejidad ascendente sobre el camino que va de la p
 | 5 | Temporización en segundo plano | Concurrencia preemptiva con interrupciones (`TIM3`, NVIC e ISR) |
 | 6 | Antirrebote profesional | Muestreo del pulsador dentro de una ISR (`TIM4`) y bandera `volatile` |
 
-Consigna completa en [`consigna/guia-laboratorio-stm32.pdf`](./consigna).
+## Estructura
+
+| | Qué contiene |
+|---|---|
+| [`consigna/`](./consigna) | Guía oficial de la cátedra |
+| [`setup.md`](./setup.md) | Cableado y configuración de CubeMX, paso a paso |
+| `firmware/` | Proyecto CubeMX + CMake; los desafíos van en `firmware/desafios/` |
+| `explicacion.md` | Explicación de cada desafío, para estudiar |
