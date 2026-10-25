@@ -44,7 +44,7 @@
 
 % ------------------------------------------------------------
 \begin{center}
-  {\large\bfseries Concurrencia sobre STM32: del super-loop bloqueante a las interrupciones}\\[2pt]
+  {\large\bfseries Concurrencia sobre STM32}\\[2pt]
   {\small Laboratorio 2 \textbar{} Sistemas Electrónicos de Instrumentación}\\[2pt]
   {\footnotesize Pedro Villar \quad\textbar\quad \today}
 \end{center}
@@ -52,13 +52,10 @@
 \hrule
 \vspace{4pt}
 
-Resolví los seis desafíos sobre una \textbf{Nucleo-F411RE} en lugar de la F411E-DISCO de la guía.
+Resolví los seis desafíos sobre una \textbf{Nucleo-F411RE}.
 El LED verde es el de la placa (PA5) y el naranja, rojo y azul los cableé en un protoboard
 (PA6, PA7 y PB6). El botón es el de la placa (PC13) y es activo en bajo, por eso en el código
-``presionado'' se compara contra \texttt{GPIO\_PIN\_RESET}. El reloj es el HSI de 16\,MHz sin PLL:
-con prescaler de 16000 los timers cuentan a 1\,kHz y el período en ms se escribe directo en el ARR.
-Acá incluyo solo el lazo principal y los callbacks de cada desafío; el proyecto completo está en el
-\href{https://github.com/PedroMVillar/Sist.Instrumentacion}{repositorio}.
+``presionado'' se compara contra \texttt{GPIO\_PIN\_RESET}.
 
 % ------------------------------------------------------------
 \section*{Desafío 1: Memoria de estado y antirrebote bloqueante}
