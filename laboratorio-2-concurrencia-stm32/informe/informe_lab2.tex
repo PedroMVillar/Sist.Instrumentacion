@@ -45,24 +45,23 @@
 % ------------------------------------------------------------
 \begin{center}
   {\large\bfseries Concurrencia sobre STM32: del super-loop bloqueante a las interrupciones}\\[2pt]
-  {\small Laboratorio 2 --- Sistemas Electrónicos de Instrumentación}\\[2pt]
+  {\small Laboratorio 2 \textbar{} Sistemas Electrónicos de Instrumentación}\\[2pt]
   {\footnotesize Pedro Villar \quad\textbar\quad \today}
 \end{center}
 \vspace{-4pt}
 \hrule
 \vspace{4pt}
 
-Los seis desafíos se resolvieron sobre una \textbf{Nucleo-F411RE} en lugar de la F411E-DISCO de la
-guía, así que hubo que adaptar pines: el LED verde es el de la placa (PA5), el naranja, rojo y azul
-se cablearon externos (PA6, PA7, PB6), y el botón es el de la placa (PC13), que es \emph{activo en
-bajo} --- al revés que en la guía, por eso en el código ``presionado'' se compara contra
-\texttt{GPIO\_PIN\_RESET}. Todo corre con el HSI de 16\,MHz sin PLL: con prescaler 16000 los timers
-cuentan a 1\,kHz y el período en ms se escribe directo en el ARR. Acá va solo el lazo principal de
-cada desafío; el proyecto completo (CubeMX + CMake, un archivo por desafío) está en el
+Resolví los seis desafíos sobre una \textbf{Nucleo-F411RE} en lugar de la F411E-DISCO de la guía.
+El LED verde es el de la placa (PA5) y el naranja, rojo y azul los cableé en un protoboard
+(PA6, PA7 y PB6). El botón es el de la placa (PC13) y es activo en bajo, por eso en el código
+``presionado'' se compara contra \texttt{GPIO\_PIN\_RESET}. El reloj es el HSI de 16\,MHz sin PLL:
+con prescaler de 16000 los timers cuentan a 1\,kHz y el período en ms se escribe directo en el ARR.
+Acá incluyo solo el lazo principal y los callbacks de cada desafío; el proyecto completo está en el
 \href{https://github.com/PedroMVillar/Sist.Instrumentacion}{repositorio}.
 
 % ------------------------------------------------------------
-\section*{Desafío 1 --- Memoria de estado y antirrebote bloqueante}
+\section*{Desafío 1: Memoria de estado y antirrebote bloqueante}
 
 \begin{lstlisting}
 while (1) {
@@ -76,14 +75,13 @@ while (1) {
 }
 \end{lstlisting}
 
-La clave es detectar el \emph{flanco} y no el nivel: sin el \texttt{while} final, mantener apretado
-dispararía toggles sin parar. El rebote se filtra esperando 50\,ms y releyendo. Funciona
-perfecto\ldots{} porque es la única tarea: entre el delay y la espera a que se suelte el botón, el
-procesador queda clavado sin poder atender nada más. Ese es exactamente el problema que el resto del
-laboratorio va a ir resolviendo.
+Lo importante acá es detectar el flanco y no el nivel: sin el \texttt{while} del final, mantener
+el botón apretado haría toggles sin parar. El rebote se filtra esperando 50\,ms y volviendo a leer.
+El problema es que mientras espera, el procesador no puede hacer nada más. Funciona bien solo
+porque es la única tarea del programa.
 
 % ------------------------------------------------------------
-\section*{Desafío 2 --- Temporización cooperativa con \texttt{HAL\_GetTick()}}
+\section*{Desafío 2: Temporización cooperativa con \texttt{HAL\_GetTick()}}
 
 \begin{lstlisting}
 while (1) {
@@ -99,14 +97,13 @@ while (1) {
 }
 \end{lstlisting}
 
-En vez de frenar 250\,ms, el lazo pregunta en cada vuelta ``¿ya pasaron?''. El loop gira miles de
-veces por segundo, así que el verde responde al botón al instante mientras el azul mantiene su
-ritmo. Detalle fino: la resta entre \texttt{uint32\_t} sigue dando bien incluso cuando el contador
-de ticks desborda. Esto es concurrencia \emph{cooperativa}: las tareas conviven porque ninguna
-bloquea.
+En vez de frenar 250\,ms, el lazo pregunta en cada vuelta si ya pasó el tiempo. Como el loop gira
+miles de veces por segundo, el verde responde al botón al instante y el azul mantiene su ritmo.
+La resta entre \texttt{uint32\_t} sigue dando bien aunque el contador de ticks desborde. Ninguna
+tarea bloquea a la otra: eso es concurrencia cooperativa.
 
 % ------------------------------------------------------------
-\section*{Desafío 3 --- Máquina de estados}
+\section*{Desafío 3: Máquina de estados}
 
 \begin{lstlisting}
 while (1) {
@@ -127,14 +124,13 @@ while (1) {
 }
 \end{lstlisting}
 
-Acá se integran las dos técnicas anteriores. El flanco se detecta comparando la lectura actual con
-la anterior (el lazo ya no puede darse el lujo de quedarse esperando), y la variable
-\texttt{estado} es la memoria del sistema: define el período de parpadeo sin tocar la lógica del
-botón. Por eso la respuesta a la presión es inmediata sin importar qué tan rápido parpadeen los
-LEDs.
+Acá se juntan las dos técnicas anteriores. El flanco se detecta comparando la lectura actual del
+botón con la anterior, y la variable \texttt{estado} guarda en qué modo está el sistema y define
+el período de parpadeo. Como nada bloquea, el botón responde al instante sin importar qué tan
+rápido parpadeen los LEDs.
 
 % ------------------------------------------------------------
-\section*{Desafío 4 --- Timer de hardware por polling}
+\section*{Desafío 4: Timer de hardware por polling}
 
 \begin{lstlisting}
 HAL_TIM_Base_Start(&htim2);              // desborda cada 100 ms (PSC 16000-1)
@@ -146,13 +142,13 @@ while (1) {
 }
 \end{lstlisting}
 
-El procesador deja de contar tiempo: lo cuenta un periférico dedicado, con precisión de hardware e
-independiente del SysTick. Pero todavía hay que \emph{preguntar}: si el lazo estuviera ocupado en
-otra cosa, el flag quedaría levantado esperando y la secuencia se atrasaría. La ventaja sobre el
-desafío 2 es la precisión; la limitación sigue siendo el polling.
+Ahora el tiempo lo cuenta un timer de hardware en vez del procesador, con la precisión de un
+periférico dedicado e independiente del SysTick. Pero todavía hay que preguntar por el flag: si el
+lazo estuviera ocupado en otra cosa, la secuencia se atrasaría. Se gana precisión respecto al
+desafío 2, pero la limitación sigue siendo el polling.
 
 % ------------------------------------------------------------
-\section*{Desafío 5 --- Interrupciones}
+\section*{Desafío 5: Interrupciones}
 
 \begin{lstlisting}
 HAL_TIM_Base_Start_IT(&htim3);           // TIM3 interrumpe cada 500 ms
@@ -167,13 +163,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 \end{lstlisting}
 
-La prueba de fuego: el main está preso de un \texttt{HAL\_Delay(5000)} (el verde cambia cada 5
-segundos y lo delata), y sin embargo el naranja parpadea a 1\,Hz exacto. El NVIC frena al main donde
-esté, ejecuta el callback y le devuelve el control como si nada. Nadie pregunta por ningún flag:
-el hardware \emph{avisa}. Esto ya es concurrencia preemptiva.
+El main está bloqueado 5 segundos en un \texttt{HAL\_Delay} (el verde lo delata, cambia cada 5
+segundos) y aun así el naranja parpadea a 1\,Hz exacto. El NVIC frena al main donde esté, ejecuta
+el callback y le devuelve el control. Ya nadie pregunta por un flag: el hardware avisa. Esto es
+concurrencia preemptiva.
 
 % ------------------------------------------------------------
-\section*{Desafío 6 --- Antirrebote por muestreo en ISR}
+\section*{Desafío 6: Antirrebote por muestreo en ISR}
 
 \begin{lstlisting}
 volatile uint8_t bandera_boton = 0;      // la escribe la interrupción
@@ -198,27 +194,23 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 \end{lstlisting}
 
-El mismo problema del desafío 1, resuelto sin bloquear ni un microsegundo: el TIM4 muestrea el botón
-cada 10\,ms y recién con 5 lecturas seguidas en ``presionado'' da el flanco por válido --- el ruido
-nunca junta 5. ISR y main se comunican por una bandera compartida, y ahí \texttt{volatile} no es
-decorativo: sin él, el compilador ve que el main nunca escribe la variable, asume que vale siempre
-cero y el toggle no ocurre jamás.
+Es el mismo problema del desafío 1 pero resuelto sin bloquear: el TIM4 muestrea el botón cada
+10\,ms y recién con 5 lecturas seguidas da la presión por válida, porque el ruido del rebote no
+llega a juntar 5. El main y la interrupción se comunican con una bandera compartida, y ahí el
+\texttt{volatile} es obligatorio: sin él, el compilador asume que la variable nunca cambia y el
+toggle no ocurre.
 
 % ------------------------------------------------------------
 \section*{Conclusiones}
 
-El laboratorio es, en el fondo, una sola pregunta repetida seis veces: ¿quién es el dueño del
-tiempo? Primero lo tiene el procesador y lo gasta esperando (\texttt{HAL\_Delay}); después lo
-administra el propio lazo preguntando la hora (\texttt{HAL\_GetTick}); después lo cuenta un
-periférico y el procesador solo consulta (polling del flag); y al final el periférico directamente
-interrumpe y avisa. Cada paso libera más al main, a cambio de un modelo mental más complejo: con
-interrupciones el programa deja de ser una secuencia que uno puede seguir con el dedo, y aparecen
-problemas nuevos que en software ``normal'' no existen, como que el compilador optimice de más una
-variable compartida si uno se olvida del \texttt{volatile}. Me quedo con una regla práctica que
-resume todo: \emph{bloquear solo se puede cuando no hay nada más que atender} --- y casi siempre
-hay algo más que atender. Viniendo del laboratorio 1, donde la concurrencia era literal porque cada
-bloque era hardware funcionando en paralelo, acá se ve el mismo objetivo pero desde un solo hilo de
-ejecución: la FPGA es paralela por naturaleza y hay que esforzarse para secuenciar; el micro es
-secuencial por naturaleza y hay que esforzarse para que parezca paralelo.
+A lo largo de los desafíos, el manejo del tiempo fue pasando del procesador a los periféricos.
+Primero el procesador espera (\texttt{HAL\_Delay}), después el lazo consulta la hora
+(\texttt{HAL\_GetTick}), después un timer cuenta y el lazo pregunta por el flag, y al final el
+timer directamente interrumpe. Cada paso libera más al main, pero el programa se vuelve más
+difícil de seguir y aparecen detalles nuevos, como el \texttt{volatile} en variables compartidas
+con una ISR. La regla que me llevo es simple: bloquear solo está bien cuando no hay nada más que
+atender, y casi siempre hay algo más que atender. Comparado con el laboratorio 1, donde cada
+bloque de la FPGA funcionaba en paralelo de verdad, acá hay un solo hilo que tiene que repartirse
+entre todo, y las interrupciones son la herramienta que hace que eso parezca paralelo.
 
 \end{document}
