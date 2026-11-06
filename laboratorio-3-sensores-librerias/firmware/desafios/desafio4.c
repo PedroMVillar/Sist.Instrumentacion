@@ -72,12 +72,13 @@ static void accel_init(void)
 }
 
 /* LEDs direccionales según inclinación. Cuando hay alarma, el LED rojo
-   es de la alarma y esta función no lo toca. */
+   es de la alarma y esta función no lo toca.
+   El mapeo de ejes y signos salió de probar en la placa. */
 static void ActualizarLedsInclinacion(int8_t x, int8_t y, uint8_t alarma)
 {
   if (!alarma)
   {
-    if (x > UMBRAL_INCLINACION)
+    if (y < -UMBRAL_INCLINACION)
     {
       HAL_GPIO_WritePin(LED_ROJO_GPIO_Port, LED_ROJO_Pin, GPIO_PIN_SET);
     }
@@ -87,7 +88,7 @@ static void ActualizarLedsInclinacion(int8_t x, int8_t y, uint8_t alarma)
     }
   }
 
-  if (x < -UMBRAL_INCLINACION)
+  if (y > UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin, GPIO_PIN_SET);
   }
@@ -96,7 +97,7 @@ static void ActualizarLedsInclinacion(int8_t x, int8_t y, uint8_t alarma)
     HAL_GPIO_WritePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin, GPIO_PIN_RESET);
   }
 
-  if (y > UMBRAL_INCLINACION)
+  if (x < -UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_NARANJA_GPIO_Port, LED_NARANJA_Pin, GPIO_PIN_SET);
   }
@@ -105,7 +106,7 @@ static void ActualizarLedsInclinacion(int8_t x, int8_t y, uint8_t alarma)
     HAL_GPIO_WritePin(LED_NARANJA_GPIO_Port, LED_NARANJA_Pin, GPIO_PIN_RESET);
   }
 
-  if (y < -UMBRAL_INCLINACION)
+  if (x > UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_AZUL_GPIO_Port, LED_AZUL_Pin, GPIO_PIN_SET);
   }

@@ -67,10 +67,12 @@ static void accel_init(void)
 }
 
 /* Enciende el LED del lado hacia el que está inclinada la placa.
-   (Si en la práctica queda espejado, dar vuelta los signos.) */
+   El azul no participa: la consigna lo reserva para el heartbeat,
+   así que la inclinación hacia ese lado queda sin LED.
+   El mapeo de ejes y signos salió de probar en la placa. */
 static void ActualizarLedsInclinacion(int8_t x, int8_t y)
 {
-  if (x > UMBRAL_INCLINACION)
+  if (y < -UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_ROJO_GPIO_Port, LED_ROJO_Pin, GPIO_PIN_SET);
   }
@@ -79,7 +81,7 @@ static void ActualizarLedsInclinacion(int8_t x, int8_t y)
     HAL_GPIO_WritePin(LED_ROJO_GPIO_Port, LED_ROJO_Pin, GPIO_PIN_RESET);
   }
 
-  if (x < -UMBRAL_INCLINACION)
+  if (y > UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin, GPIO_PIN_SET);
   }
@@ -88,22 +90,13 @@ static void ActualizarLedsInclinacion(int8_t x, int8_t y)
     HAL_GPIO_WritePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin, GPIO_PIN_RESET);
   }
 
-  if (y > UMBRAL_INCLINACION)
+  if (x < -UMBRAL_INCLINACION)
   {
     HAL_GPIO_WritePin(LED_NARANJA_GPIO_Port, LED_NARANJA_Pin, GPIO_PIN_SET);
   }
   else
   {
     HAL_GPIO_WritePin(LED_NARANJA_GPIO_Port, LED_NARANJA_Pin, GPIO_PIN_RESET);
-  }
-
-  if (y < -UMBRAL_INCLINACION)
-  {
-    HAL_GPIO_WritePin(LED_AZUL_GPIO_Port, LED_AZUL_Pin, GPIO_PIN_SET);
-  }
-  else
-  {
-    HAL_GPIO_WritePin(LED_AZUL_GPIO_Port, LED_AZUL_Pin, GPIO_PIN_RESET);
   }
 }
 
@@ -138,9 +131,7 @@ int main(void)
     HAL_Delay(500);
 #else
     /* LA SOLUCIÓN: mismo parpadeo, pero preguntando la hora en vez
-       de frenar. El loop gira libre y la inclinación responde fluida.
-       (Nota: acá el azul es del heartbeat, así que la inclinación en Y
-       negativa se nota menos — es el mismo LED compartido.) */
+       de frenar. El loop gira libre y la inclinación responde fluida. */
     if (HAL_GetTick() - millisAnterior >= 500)
     {
       millisAnterior = HAL_GetTick();
