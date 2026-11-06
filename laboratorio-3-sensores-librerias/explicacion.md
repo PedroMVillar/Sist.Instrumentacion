@@ -57,7 +57,7 @@ sequenceDiagram
 
 ## Desafío 3 — El acelerómetro y el problema del bloqueo
 
-**Qué hace:** el naranja, el verde y el rojo señalan hacia dónde se inclina la placa (se lee X e Y del LIS3DSH por SPI); el azul no participa porque queda reservado para el latido. Encima corre un "latido": el LED azul parpadeando cada 500 ms. El experimento es implementar ese latido de las dos maneras (el `#define HEARTBEAT_BLOQUEANTE` al principio del archivo) y **ver** la diferencia:
+**Qué hace:** el naranja, el verde y el rojo señalan hacia dónde se inclina la placa (se lee X e Y del LIS3DSH por SPI). Encima corre un "latido": el LED azul parpadeando cada 500 ms, y por eso el azul no participa de la inclinación. El experimento es implementar ese latido de las dos maneras (el `#define HEARTBEAT_BLOQUEANTE` al principio del archivo) y **ver** la diferencia:
 
 - **Con `HAL_Delay(500)`:** el loop completo queda preso del delay. El acelerómetro se lee 2 veces por segundo y los LEDs direccionales cambian a los tirones, medio segundo tarde.
 - **Con `HAL_GetTick()`:** el loop gira miles de veces por segundo; el azul parpadea exactamente igual, pero la inclinación responde al instante.

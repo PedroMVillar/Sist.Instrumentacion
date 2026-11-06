@@ -10,7 +10,6 @@
  *
  * Verificación: correr en modo Debug (F5) y mirar las variables
  * temp_bloqueante y temp_no_bloqueante en Live Expressions.
- * El LED verde parpadea como señal de que el programa corre.
  */
 
 #include "main.h"
@@ -60,10 +59,6 @@ int main(void)
          en un programa real acá se haría otro trabajo */
     }
     temp_no_bloqueante = temperatura;
-
-    /* Latido: señal visible de que el loop está corriendo */
-    HAL_GPIO_TogglePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin);
-    HAL_Delay(500);
   }
 }
 
