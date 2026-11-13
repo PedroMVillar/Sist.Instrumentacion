@@ -1,0 +1,32 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configurar",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "Debug"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Compilar",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build/Debug"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Grabar en la placa",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/stlink.cfg",
+                "-f", "target/stm32f4x.cfg",
+                "-c", "program build/Debug/firmware.elf verify reset exit"
+            ],
+            "dependsOn": "Compilar",
+            "problemMatcher": []
+        }
+    ]
+}

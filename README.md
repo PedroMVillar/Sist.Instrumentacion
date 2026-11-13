@@ -6,6 +6,7 @@
 ![Laboratorio 1](https://img.shields.io/badge/lab_1-entregado-2ea44f?style=flat-square)
 ![Laboratorio 2](https://img.shields.io/badge/lab_2-entregado-2ea44f?style=flat-square)
 ![Laboratorio 3](https://img.shields.io/badge/lab_3-entregado-2ea44f?style=flat-square)
+![Laboratorio 4](https://img.shields.io/badge/lab_4-en_desarrollo-d4a72c?style=flat-square)
 ![SystemVerilog](https://img.shields.io/badge/SystemVerilog-Vivado_2024.2-008080?style=flat-square)
 
 </div>
@@ -21,6 +22,7 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 | **[1 — Frecuencímetro sobre FPGA](./laboratorio-1-frecuencimetro-fpga)** | Boolean Board · Spartan-7 `xc7s50csga324-1` | Entregado | 7 módulos SystemVerilog, restricciones y informe |
 | **[2 — Concurrencia sobre STM32](./laboratorio-2-concurrencia-stm32)** | NUCLEO-F411RE · VS Code + CMake (HAL) | Entregado | 6 desafíos de complejidad ascendente, setup, explicaciones e informe |
 | **[3 — Sensores y librerías](./laboratorio-3-sensores-librerias)** | F4Discovery (F407VG) · VS Code + CMake (HAL) | Entregado | HC-SR04, LM35, acelerómetro SPI y super-loop integrador |
+| **[4 — Control PID: ball and beam](./laboratorio-4-control-PID)** | F4Discovery (F407VG) · VS Code + CMake (HAL) | En desarrollo | PID con anti-windup, HC-SR04 y servo por PWM sobre la maqueta |
 
 ## Teoría
 
@@ -45,7 +47,7 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 | `src/` | Código propio, listo para sintetizar (lab 1) |
 | `src-catedra/` | Esqueleto y módulos provistos, sin modificar (lab 1) |
 | `informe/` | Fuente LaTeX, PDF entregado y evidencia de la medición (lab 1) |
-| `firmware/` | Proyecto CubeMX + CMake con los desafíos (lab 2) |
+| `firmware/` | Proyecto CubeMX + CMake con el código del lab (labs 2 a 4) |
 
 <details>
 <summary><b>Árbol completo del repositorio</b></summary>
