@@ -14,7 +14,7 @@ flowchart LR
     B --> S
 ```
 
-Cada 40 ms el lazo hace lo mismo: mide dónde está la bola, calcula el error (`setpoint - posicion`), y con ese error decide cuántos grados inclinar la viga.
+Cada 50 ms el lazo hace lo mismo: mide dónde está la bola, calcula el error (`setpoint - posicion`), y con ese error decide cuántos grados inclinar la viga.
 
 ## Las tres acciones del PID
 
@@ -38,7 +38,7 @@ La ecuación de la guía, en su forma estándar:
 
 **Capa de hardware.** El PID no sabe qué sensor ni qué servo hay: solo ve `LeerSensorDistancia()` y `ActualizarServo()`. Si mañana cambia el sensor, el algoritmo no se toca. Es la misma idea de librerías del lab 3.
 
-## Por qué el lazo corre cada 40 ms (el tiempo de muestreo)
+## Por qué el lazo corre cada 50 ms (el tiempo de muestreo)
 
 La guía pide Ts entre 20 y 50 ms, y las tres razones son límites físicos:
 
@@ -52,7 +52,7 @@ El lazo usa `HAL_GetTick()` como en los labs 2 y 3: nada bloquea, el `if` del ti
 
 Todo se hace en modo Debug editando `pid_bola.kp`, `pid_bola.ki` y `pid_bola.kd` en Live Expressions, sin recompilar:
 
-1. **Aislar el P:** poner `ki = 0` y `kd = 0`.
+1. **Aislar el P:** poner `pid_bola.ki = 0` y `pid_bola.kd = 0` (con `modo = 1` y la maqueta ya verificada según `setup.md`).
 2. **Buscar la oscilación crítica:** subir `kp` de a poco hasta que la bola oscile de forma sostenida, sin crecer ni amortiguarse. Ese `kp` es la **ganancia crítica Ku**.
 3. **Medir el período:** cronometrar una oscilación completa de la bola (ida y vuelta). Ese tiempo es el **período crítico Tu**, en segundos.
 4. **Calcular:**
@@ -70,7 +70,7 @@ Todo se hace en modo Debug editando `pid_bola.kp`, `pid_bola.ki` y `pid_bola.kd`
 | Queda quieta pero fuera del centro | Falta integral | Subir `ki` de a poco |
 | Tarda mucho en centrarse después de estar lejos | Windup o mucho I | Bajar `ki` (el anti-windup ya ayuda) |
 | El servo tiembla con la bola quieta | Ruido del sensor en el D | Bajar `kd`, o subir Ts |
-| Corrige para el lado equivocado | Signo invertido | Cambiar el signo de `SERVO_US_POR_GRADO` |
+| Corrige para el lado equivocado | Signo invertido | Poner `sentido = -1` en Live Expressions |
 
 ## La idea que cierra los cuatro labs
 

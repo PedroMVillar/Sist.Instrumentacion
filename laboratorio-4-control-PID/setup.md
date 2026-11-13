@@ -26,21 +26,8 @@ El sensor va montado en un extremo de la viga, apuntando a la bola.
 | Periférico | Configuración | Para qué |
 |---|---|---|
 | `TIM2` | PSC `16-1` (tick de 1 µs), canal 2 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
-| `TIM4` | PSC `16-1` (tick de 1 µs), ARR `20000-1` (período 20 ms), canal 1 PWM | Genera el pulso del servo a 50 Hz; el ancho en µs se escribe directo en el comparador |
+| `TIM4` | PSC `16-1` (tick de 1 µs), ARR `20000-1` (período 20 ms), canal 1 PWM | Pulso del servo a 50 Hz; el ancho en µs va directo al comparador |
 | Reloj | HSI 16 MHz sin PLL | Igual que los labs anteriores |
-
-## Parámetros a ajustar con la maqueta armada
-
-Están todos arriba de `firmware/app/main_balancin.c`:
-
-| Define | Qué es | Cómo ajustarlo |
-|---|---|---|
-| `SETPOINT_CM` | Distancia sensor–centro de la viga | Poner la bola en el centro y leer `posicion` en Live Expressions |
-| `SERVO_US_POR_GRADO` | Conversión de grados a µs de pulso | Si la viga corrige para el lado equivocado, cambiarle el signo |
-| `ANGULO_MAX` | Inclinación máxima | Que la viga no choque contra nada en los extremos |
-| `KP_INICIAL` etc. | Ganancias del PID | Con el procedimiento de `explicacion.md` |
-
-Antes de poner la bola: grabar, verificar que la viga queda horizontal, y mover `setpoint` en Live Expressions para ver que el servo responde para el lado correcto.
 
 ## Compilar y grabar (VS Code)
 
@@ -49,4 +36,17 @@ Antes de poner la bola: grabar, verificar que la viga queda horizontal, y mover 
 3. Task **Compilar** (o `Ctrl+Shift+B`).
 4. Conectar el USB mini del ST-LINK (CN1) y correr la task **Grabar en la placa**.
 
-Para sintonizar: correr en modo Debug (`F5`) y usar Live Expressions con `posicion`, `salida_angulo`, `setpoint` y `pid_bola` (las ganancias `kp`, `ki`, `kd` se pueden editar en vivo, sin recompilar).
+## Primera prueba, paso a paso
+
+El programa arranca en **modo 0**: solo mide, con la viga horizontal. Todo se ajusta en vivo desde el debugger (`F5` y cargar en Live Expressions: `modo`, `distancia_cm`, `posicion_cm`, `centro_viga_cm`, `sentido`, `servo_centro_us`, `salida_angulo`, `pid_bola`).
+
+Los LEDs dicen en qué estado está: **rojo** = no ve la bola, **verde** = bola centrada (±2 cm), **azul** = modo control activo.
+
+1. **Viga horizontal.** Grabar y mirar la viga: si no queda horizontal, ajustar `servo_centro_us` en vivo hasta que quede (valores típicos: 1300 a 1700).
+2. **El sensor ve la bola.** Poner la bola en la viga: el LED rojo se apaga y `distancia_cm` tiene que seguirla cuando la movés con la mano. Si marca cualquier cosa, revisar TRIG/ECHO.
+3. **Medir el centro.** Con la bola quieta en el medio de la viga, leer `distancia_cm` y cargar ese valor en `centro_viga_cm`. Desde ahí `posicion_cm` queda en cero con la bola centrada. Ajustar `distancia_max_cm` al largo útil real si hace falta.
+4. **Verificar el sentido.** Poner `modo = 1` con la bola a un costado: la viga tiene que inclinarse para empujarla hacia el centro. Si la empuja para afuera, poner `sentido = -1`.
+5. **Controlar.** Con el sentido correcto ya debería intentar centrarla (arranca con las ganancias de la guía: Kp=1.5, Ki=0.2, Kd=0.05). Si oscila o queda corta, sintonizar con el procedimiento de [`explicacion.md`](./explicacion.md) editando `pid_bola.kp/ki/kd` en vivo.
+6. **Guardar lo encontrado.** Los valores que funcionaron (`centro_viga_cm`, `servo_centro_us`, `sentido`, las ganancias) se pasan a los valores iniciales en `firmware/app/main_balancin.c` para que queden grabados.
+
+Si en cualquier momento la bola se va de la viga o el sensor la pierde, el programa solo pone la viga horizontal y resetea el PID (LED rojo encendido); al volver a verla, retoma.
