@@ -33,3 +33,4 @@ Cuatro desafíos sobre adquisición de datos del entorno: integrar una librería
 | [`firmware/`](./firmware) | Proyecto CubeMX + CMake; los desafíos van en `firmware/desafios/` |
 | [`firmware/libs/`](./firmware/libs) | `HC_SR04` (provista por la cátedra, sin modificar) y `lm35` (propia, del desafío 2) |
 | `explicacion.md` | Explicación de cada desafío, para estudiar |
+| [`informe/`](./informe) | Informe de entrega (fuente LaTeX y PDF) |
