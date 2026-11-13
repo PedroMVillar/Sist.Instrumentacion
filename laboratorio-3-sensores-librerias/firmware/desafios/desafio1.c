@@ -42,6 +42,11 @@ int main(void)
 
   while (1)
   {
+    /* Frenar la captura antes de disparar: si la medición anterior se
+       perdió (eco que nunca llegó), la interrupción queda encendida y
+       el próximo arranque fallaría. Así el arranque nunca falla. */
+    HAL_TIM_IC_Stop_IT(sensor_distancia.htim, sensor_distancia.IC_Channel);
+
     /* Disparar una medición (no bloqueante: vuelve enseguida) */
     hcsr04_start_measurement(&sensor_distancia);
 

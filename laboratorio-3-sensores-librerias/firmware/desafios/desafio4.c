@@ -181,7 +181,9 @@ int main(void)
       {
         distancia = hcsr04_get_distance_cm(&sensor_distancia);
       }
-      /* ...y disparar la siguiente */
+      /* ...y disparar la siguiente, frenando antes la captura por si
+         la medición anterior se perdió (si no, el arranque fallaría) */
+      HAL_TIM_IC_Stop_IT(sensor_distancia.htim, sensor_distancia.IC_Channel);
       hcsr04_start_measurement(&sensor_distancia);
     }
 
