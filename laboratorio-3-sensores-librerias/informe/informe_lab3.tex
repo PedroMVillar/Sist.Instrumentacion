@@ -53,10 +53,7 @@
 \vspace{4pt}
 
 Resolví los cuatro desafíos sobre una \textbf{STM32F4Discovery}, con un HC-SR04 y un LM35
-cableados en protoboard y el acelerómetro LIS3DSH que ya viene en la placa. Acá va el lazo
-principal de cada desafío con sus callbacks; el proyecto completo (CubeMX + CMake, un archivo
-por desafío y la librería \texttt{lm35} propia) está en el
-\href{https://github.com/PedroMVillar/Sist.Instrumentacion}{repositorio}.
+cableados en protoboard y el acelerómetro LIS3DSH que ya viene en la placa.
 
 % ------------------------------------------------------------
 \section*{Desafío 1: HC-SR04, librerías de terceros y actuadores}
@@ -84,7 +81,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 }
 \end{lstlisting}
 
-La librería de la cátedra hace el trabajo fino: genera el pulso de trigger y mide el ancho del
+La librería que dieron en el classroom genera el pulso de trigger y mide el ancho del
 eco con el timer en Input Capture. Desde el main solo se dispara la medición, se espera y se
 pregunta si hay dato. El \texttt{Stop\_IT} del principio evita que un eco perdido deje trabado
 el arranque siguiente. El callback no interpreta nada: le pasa los flancos a la librería, que es
@@ -139,8 +136,7 @@ while (1) {
 Con \texttt{HAL\_Delay} el azul parpadea bien, pero la inclinación se revisa solo dos veces por
 segundo y los LEDs responden a los tirones. Con \texttt{HAL\_GetTick} el loop gira libre: el azul
 parpadea igual y la inclinación responde al instante. El azul queda reservado para el latido, así
-que la inclinación usa los otros tres LEDs. Dato de la práctica: los ejes del chip vienen rotados
-90 grados respecto de los LEDs de la placa, así que el mapeo de signos salió de probar.
+que la inclinación usa los otros tres LEDs.
 
 % ------------------------------------------------------------
 \section*{Desafío 4: el super-loop y la integración total}
@@ -199,7 +195,7 @@ El laboratorio junta las tres formas de entrar datos al micro: un sensor digital
 un timer (HC-SR04), uno analógico que pasa por el ADC (LM35) y uno que habla por un bus serie
 (el acelerómetro por SPI). Del lado del software, la lección fue separar capas: la librería
 resuelve el sensor y el main decide qué hacer con el dato. Escribir \texttt{lm35} con instancias
-y fases me ayudó a entender la librería de la cátedra, que sigue la misma idea. Y el desafío 4
+y fases me ayudó a entender la librería que subió el profe al classroom, que sigue la misma idea. Y el desafío 4
 cierra lo que venía del laboratorio 2: en el super-loop final cada tarea decide si le toca correr
 mirando el reloj, y por eso tres sensores y una alarma conviven en un mismo hilo sin molestarse.
 
