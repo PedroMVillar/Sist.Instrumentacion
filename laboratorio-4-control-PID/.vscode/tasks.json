@@ -6,6 +6,7 @@
             "type": "shell",
             "command": "cmake",
             "args": ["--preset", "Debug"],
+            "options": { "cwd": "${workspaceFolder}/firmware" },
             "problemMatcher": []
         },
         {
@@ -13,6 +14,7 @@
             "type": "shell",
             "command": "cmake",
             "args": ["--build", "build/Debug"],
+            "options": { "cwd": "${workspaceFolder}/firmware" },
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": ["$gcc"]
         },
@@ -25,8 +27,25 @@
                 "-f", "target/stm32f4x.cfg",
                 "-c", "program build/Debug/firmware.elf verify reset exit"
             ],
+            "options": { "cwd": "${workspaceFolder}/firmware" },
             "dependsOn": "Compilar",
             "problemMatcher": []
+        },
+        {
+            "label": "Consola",
+            "type": "shell",
+            "command": "python",
+            "args": ["consola/consola.py", "${input:puertoCOM}"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "puertoCOM",
+            "type": "promptString",
+            "description": "Puerto COM del ST-LINK (mirar en Administrador de dispositivos)",
+            "default": "COM5"
         }
     ]
 }

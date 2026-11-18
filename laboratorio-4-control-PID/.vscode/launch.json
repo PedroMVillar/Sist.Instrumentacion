@@ -5,8 +5,8 @@
             "name": "Debug en la placa (OpenOCD)",
             "type": "cortex-debug",
             "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "executable": "build/Debug/firmware.elf",
+            "cwd": "${workspaceFolder}/firmware",
+            "executable": "${workspaceFolder}/firmware/build/Debug/firmware.elf",
             "servertype": "openocd",
             "device": "STM32F407VG",
             "configFiles": [

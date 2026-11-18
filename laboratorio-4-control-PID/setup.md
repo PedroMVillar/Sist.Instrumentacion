@@ -38,7 +38,7 @@ Administrador de dispositivos ("STMicroelectronics STLink Virtual COM Port").
 
 ## Compilar y grabar (VS Code)
 
-1. Abrir la carpeta `firmware/` en VS Code.
+1. Abrir la carpeta `laboratorio-4-control-PID/` en VS Code (acá mismo: están el firmware, la consola y este instructivo juntos).
 2. `Ctrl+Shift+P` → "Tasks: Run Task" → **Configurar** (solo la primera vez).
 3. Task **Compilar** (o `Ctrl+Shift+B`).
 4. Conectar el USB mini del ST-LINK (CN1) y correr la task **Grabar en la placa**.
@@ -51,6 +51,8 @@ Con la placa grabada y el USB conectado:
 pip install pyserial matplotlib        (solo la primera vez)
 python consola/consola.py COM5         (poner el COM que aparezca en tu PC)
 ```
+
+También hay una task **Consola** en VS Code que hace lo mismo: te pregunta el COM y la abre.
 
 Se abren dos cosas: la terminal, que muestra en vivo la telemetría
 (`modo`, `distancia`, `posición`, `ángulo`, `servo`) y una ventana con el
