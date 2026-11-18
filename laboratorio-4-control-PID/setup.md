@@ -23,18 +23,25 @@ El sensor va montado en un extremo de la viga, apuntando a la pelota.
 
 ### Consola
 
-Nada que cablear: usa la UART que el ST-LINK de la placa saca por el mismo
-USB (USART2 en PA2/PA3). Al conectar el USB aparece un puerto COM en el
-Administrador de dispositivos ("STMicroelectronics STLink Virtual COM Port").
+Nada que cablear: un cable micro-USB común entre la PC y el conector **CN5**
+de la placa (el micro-USB de abajo, que va directo al F407). Al conectarlo,
+con el programa ya grabado, aparece un puerto COM nuevo en el Administrador
+de dispositivos ("Dispositivo serie USB (COMx)"). Quedan los dos cables
+puestos: el mini-USB del ST-LINK (CN1) para grabar y el micro-USB (CN5) para
+la consola.
+
+La misma consola también sale por la UART de PA2/PA3 (115200), por si algún
+día se usa un adaptador USB-serie.
 
 ## Configuración (ya está en `firmware.ioc`)
 
 | Periférico | Configuración | Para qué |
 |---|---|---|
-| Reloj | HSI + PLL a 48 MHz | Los timers de APB1 reciben 24 MHz |
-| `TIM3` | PSC `24-1` (tick de 1 µs), canal 4 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
+| Reloj | HSI + PLL a 96 MHz | Los timers de APB1 reciben 48 MHz; el USB recibe sus 48 MHz del PLL |
+| `TIM3` | PSC `48-1` (tick de 1 µs), canal 4 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
 | `TIM2` | Se configura a mano en `main_balancin.c` (`Servo_Init`), canal 2 PWM en PA1 | Pulso del servo |
-| `USART2` | 115200, 8N1, interrupción de recepción | Consola por el USB del ST-LINK |
+| `USB CDC` | USB device en CN5, generado por CubeMX | Consola: aparece como puerto COM en la PC |
+| `USART2` | 115200, 8N1, interrupción de recepción | La misma consola por PA2/PA3 (alternativa) |
 
 ## Compilar y grabar (VS Code)
 

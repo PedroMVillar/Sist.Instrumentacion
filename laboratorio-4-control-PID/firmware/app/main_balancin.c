@@ -15,6 +15,8 @@
 #include "gpio.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_device.h"
+#include "usbd_cdc_if.h"
 #include "HC_SR04.h"
 #include "pid.h"
 #include <stdbool.h>
@@ -157,6 +159,8 @@ static volatile bool comando_listo = false;
 
 static void EnviarTexto(const char *texto)
 {
+    /* Sale por los dos lados: el USB de la placa (CN5) y la UART en PA2/PA3 */
+    CDC_Transmit_FS((uint8_t *)texto, (uint16_t)strlen(texto));
     HAL_UART_Transmit(&huart2, (const uint8_t *)texto, (uint16_t)strlen(texto), 10);
 }
 
@@ -199,23 +203,38 @@ static void ProcesarComando(char *linea)
     EnviarTexto(respuesta);
 }
 
-/* La HAL llama a esto por cada byte recibido: junta la linea y avisa al loop. */
+/* Junta los bytes que llegan hasta el Enter y avisa al loop. */
+static void ConsolaRecibirByte(uint8_t byte)
+{
+    if (byte == '\n' || byte == '\r')
+    {
+        if (largo_comando > 0 && !comando_listo)
+        {
+            linea_comando[largo_comando] = '\0';
+            comando_listo = true;
+        }
+    }
+    else if (largo_comando < sizeof(linea_comando) - 1 && !comando_listo)
+    {
+        linea_comando[largo_comando++] = (char)byte;
+    }
+}
+
+/* Lo llama usbd_cdc_if.c con cada paquete que llega por el USB. */
+void ConsolaRecibirBuffer(uint8_t *datos, uint32_t largo)
+{
+    for (uint32_t i = 0; i < largo; i++)
+    {
+        ConsolaRecibirByte(datos[i]);
+    }
+}
+
+/* La HAL llama a esto por cada byte recibido por la UART. */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2)
     {
-        if (rx_byte == '\n' || rx_byte == '\r')
-        {
-            if (largo_comando > 0 && !comando_listo)
-            {
-                linea_comando[largo_comando] = '\0';
-                comando_listo = true;
-            }
-        }
-        else if (largo_comando < sizeof(linea_comando) - 1 && !comando_listo)
-        {
-            linea_comando[largo_comando++] = (char)rx_byte;
-        }
+        ConsolaRecibirByte(rx_byte);
         HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
     }
 }
@@ -229,6 +248,7 @@ int main(void)
     MX_GPIO_Init();
     MX_TIM3_Init();
     MX_USART2_UART_Init();
+    MX_USB_DEVICE_Init();   /* consola por el conector CN5 de la placa */
     Servo_Init();
     ActualizarServo(0.0f);
 
