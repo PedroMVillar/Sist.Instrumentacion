@@ -50,16 +50,16 @@ El lazo usa `HAL_GetTick()` como en los labs 2 y 3: nada bloquea, el `if` del ti
 
 ## Cómo sintonizar en la maqueta (Ziegler-Nichols)
 
-Todo se hace en modo Debug editando `pid_bola.kp`, `pid_bola.ki` y `pid_bola.kd` en Live Expressions, sin recompilar:
+Todo se hace desde la consola serie (`setup.md`), mandando `kp`, `ki` y `kd` sin recompilar:
 
-1. **Aislar el P:** poner `pid_bola.ki = 0` y `pid_bola.kd = 0` (con `modo = 1` y la maqueta ya verificada según `setup.md`).
+1. **Aislar el P:** mandar `ki 0` y `kd 0` (con `modo 1` y la maqueta ya verificada según `setup.md`).
 2. **Buscar la oscilación crítica:** subir `kp` de a poco hasta que la bola oscile de forma sostenida, sin crecer ni amortiguarse. Ese `kp` es la **ganancia crítica Ku**.
-3. **Medir el período:** cronometrar una oscilación completa de la bola (ida y vuelta). Ese tiempo es el **período crítico Tu**, en segundos.
+3. **Medir el período:** medir en el gráfico de la consola una oscilación completa de la bola (ida y vuelta). Ese tiempo es el **período crítico Tu**, en segundos.
 4. **Calcular:**
    - `kp = 0.6 × Ku`
    - `ki = kp / (0.5 × Tu)`
    - `kd = kp × (0.125 × Tu)`
-5. Cargar los tres valores y ver cómo responde. Cuando convenza, pasarlos a los `#define` de `main_balancin.c` para que queden grabados.
+5. Cargar los tres valores y ver cómo responde. Cuando convenza, pasarlos a los valores iniciales de `main_balancin.c` para que queden grabados.
 
 ### Ajuste fino: si pasa esto, tocá esto
 
@@ -70,7 +70,7 @@ Todo se hace en modo Debug editando `pid_bola.kp`, `pid_bola.ki` y `pid_bola.kd`
 | Queda quieta pero fuera del centro | Falta integral | Subir `ki` de a poco |
 | Tarda mucho en centrarse después de estar lejos | Windup o mucho I | Bajar `ki` (el anti-windup ya ayuda) |
 | El servo tiembla con la bola quieta | Ruido del sensor en el D | Bajar `kd`, o subir Ts |
-| Corrige para el lado equivocado | Signo invertido | Poner `sentido = -1` en Live Expressions |
+| Corrige para el lado equivocado | Signo invertido | Mandar `sentido -1` (o `sentido 1`) por la consola |
 
 ## La idea que cierra los cuatro labs
 

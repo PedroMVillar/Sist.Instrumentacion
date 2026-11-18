@@ -1,225 +1,343 @@
-/**
- * Laboratorio 4 — Control PID de un ball and beam
+/*
+ * Balancin (Ball and Beam) segun el PDF "Control PID - Ball and Beam".
+ * HC-SR04 mide la posicion de la pelota; un servo inclina la viga.
+ * El PID (pid.c) es el del PDF. Este archivo agrega el hardware:
+ * LeerSensorDistancia() y ActualizarServo(), como pide la seccion 4.
  *
- * La bola rueda sobre la viga, el HC-SR04 mide dónde está y un servo
- * inclina la viga. Cada TS_MS el PID calcula cuántos grados inclinar
- * para llevar la bola al centro.
- *
- * Todo se ajusta desde Live Expressions, sin recompilar:
- *   modo             0 = solo medir (viga horizontal), 1 = controlar
- *   centro_viga_cm   distancia del sensor al centro (se mide en modo 0)
- *   sentido          poner -1 si la viga corrige para el lado equivocado
- *   servo_centro_us  pulso con el que la viga queda horizontal
- *   pid_bola.kp/ki/kd  ganancias (procedimiento en explicacion.md)
- *
- * LEDs: rojo = no ve la bola, verde = bola centrada, azul = controlando.
+ * Todo se ajusta por la consola serie (USART2, 115200, por el USB del
+ * ST-LINK). La placa manda una linea de telemetria por cada Ts y acepta
+ * comandos "nombre valor", por ejemplo:
+ *   modo 1      (0 = solo medir, 1 = PID, 2 = prueba de sentido)
+ *   kp 3        ki 0.2       kd 0.005
+ *   centro 28.5     sentido -1     servo 1200     max 55
  */
-
 #include "main.h"
-#include "tim.h"
 #include "gpio.h"
+#include "tim.h"
+#include "usart.h"
 #include "HC_SR04.h"
 #include "pid.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
-/* Ts de 50 ms: la guía pide entre 20 y 50, y el HC-SR04 necesita aire
-   entre disparos para que no se mezclen ecos viejos. */
-#define TS_MS               50
-#define ANGULO_MAX          15.0f /* inclinación máxima, como el ejemplo de la guía */
-#define US_POR_GRADO        11.1f /* servo típico: 1000 µs para 90 grados */
-#define FALLAS_PARA_CENTRAR 5     /* 5 ecos inválidos seguidos = no hay bola */
+/* Ts: el PDF recomienda 20 a 50 ms. Se usa 50 ms porque el HC-SR04 necesita
+ * tiempo entre disparos (los ecos viejos rebotan) y cada medida usa el periodo. */
+#define TS_MS                50U
+#define LIMITE_GRADOS        15.0f /* +/- 15 grados, como el ejemplo del PDF */
+#define US_POR_GRADO         11.1f /* servo tipico: 1000 us para 90 grados */
+#define FALLAS_PARA_CENTRAR  5U
 
-/* --- Ajustes, editables en Live Expressions ------------------------------ */
-volatile uint32_t modo = 0;              /* 0 = solo medir, 1 = controlar */
-volatile float centro_viga_cm = 28.5f;   /* medir con la bola en el centro */
-volatile float distancia_max_cm = 55.0f; /* más lejos que esto = eco inválido */
-volatile int32_t servo_centro_us = 1500; /* pulso de viga horizontal */
-volatile float sentido = 1.0f;           /* -1 invierte el servo */
-volatile float setpoint_cm = 0.0f;       /* objetivo respecto del centro */
+/* ---------- Ajustes (editables por la consola) ---------- */
+volatile uint32_t modo = 0;              /* 0 = medir, 1 = controlar, 2 = probar sentido */
+volatile float centro_viga_cm = 28.5f;   /* medio de la viga, medido con la pelota */
+volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
+volatile int32_t servo_centro_us = 1200; /* pulso con la viga horizontal (medido aprox.) */
+volatile float sentido = -1.0f;          /* -1 comprobado con modo 2 en esta maqueta */
 
-/* --- Valores para mirar --------------------------------------------------- */
-volatile float distancia_cm = 0.0f;  /* última lectura cruda del sensor */
-volatile float posicion_cm = 0.0f;   /* posición respecto del centro, filtrada */
+/* ---------- Valores para mirar ---------- */
+volatile float distance_cm = 0.0f;   /* ultima lectura cruda del sensor */
+volatile float posicion_cm = 0.0f;   /* posicion respecto del centro (filtrada) */
 volatile float salida_angulo = 0.0f; /* lo que pide el PID, en grados */
-volatile int32_t servo_us = 1500;    /* pulso que está saliendo al servo */
-volatile uint32_t lecturas = 0;
-volatile uint32_t errores = 0;
-volatile uint32_t fallas_seguidas = FALLAS_PARA_CENTRAR; /* al inicio no hay bola */
+volatile int32_t servo_us = 1700;
+volatile uint32_t lecturas_distancia = 0, errores_distancia = 0;
+volatile uint32_t fallas_seguidas = FALLAS_PARA_CENTRAR; /* al inicio no hay pelota */
 
-HCSR04_HandleTypeDef sensor_distancia;
-PID_Controller pid_bola;
-uint8_t medicion_en_curso = 0;
+/* Global (static) para poder cambiar kp/ki/kd desde la consola. */
+static PID_Controller pid_bola;
+
+TIM_HandleTypeDef htim2;
+static HCSR04_HandleTypeDef distance_sensor;
+static bool medicion_en_curso = false;
 
 void SystemClock_Config(void);
 
-/* --- Capa de hardware: sensor y actuador ---------------------------------
-   El PID no sabe qué sensor ni qué servo hay: solo ve estas dos funciones. */
-
-static void ActualizarServo(float angulo)
+/* ---------- Servo: TIM2 canal 2 en PA1, 50 Hz ---------- */
+/* TIM2 recibe 48 MHz; prescaler 47 -> 1 us por cuenta; periodo 20000 us. */
+static void Servo_Init(void)
 {
-  if (angulo > ANGULO_MAX)
-  {
-    angulo = ANGULO_MAX;
-  }
-  else if (angulo < -ANGULO_MAX)
-  {
-    angulo = -ANGULO_MAX;
-  }
+    GPIO_InitTypeDef gpio = {0};
+    TIM_OC_InitTypeDef oc = {0};
 
-  /* El timer cuenta en µs: el ancho del pulso va directo al comparador */
-  int32_t pulso = servo_centro_us + (int32_t)(sentido * angulo * US_POR_GRADO);
-  if (pulso < 1000) pulso = 1000; /* rango físico del servo */
-  if (pulso > 2000) pulso = 2000;
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_TIM2_CLK_ENABLE();
 
-  servo_us = pulso;
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (uint32_t)pulso);
+    gpio.Pin = GPIO_PIN_1;
+    gpio.Mode = GPIO_MODE_AF_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &gpio);
+
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 47;
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 19999;
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) Error_Handler();
+
+    oc.OCMode = TIM_OCMODE_PWM1;
+    oc.Pulse = 1500;
+    oc.OCPolarity = TIM_OCPOLARITY_HIGH;
+    oc.OCFastMode = TIM_OCFAST_DISABLE;
+    if (HAL_TIM_PWM_ConfigChannel(&htim2, &oc, TIM_CHANNEL_2) != HAL_OK) Error_Handler();
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 }
 
-/* Se llama una vez por Ts: recoge la medición lanzada la vuelta anterior
-   y dispara la siguiente, sin esperar nada. Devuelve la posición respecto
-   del centro de la viga, en cm, filtrada. */
-static float LeerSensorDistancia(void)
+/* Angulo en grados (0 = viga horizontal) -> pulso del servo. */
+void ActualizarServo(float angulo)
 {
-  if (medicion_en_curso && hcsr04_is_data_ready(&sensor_distancia))
-  {
-    distancia_cm = hcsr04_get_distance_cm(&sensor_distancia);
+    if (angulo > LIMITE_GRADOS) angulo = LIMITE_GRADOS;
+    if (angulo < -LIMITE_GRADOS) angulo = -LIMITE_GRADOS;
 
-    if (distancia_cm >= 2.0f && distancia_cm <= distancia_max_cm)
+    int32_t pulso = servo_centro_us + (int32_t)(sentido * angulo * US_POR_GRADO);
+    if (pulso < 700) pulso = 700;    /* rango seguro de un servo chico */
+    if (pulso > 2300) pulso = 2300;
+    servo_us = pulso;
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint32_t)pulso);
+}
+
+/* Se llama una vez por Ts. Toma el resultado de la medicion lanzada en la
+ * llamada anterior y lanza la siguiente; no espera nada (no bloqueante).
+ * Devuelve la posicion respecto del centro de la viga, en cm, filtrada. */
+float LeerSensorDistancia(void)
+{
+    if (medicion_en_curso && hcsr04_is_data_ready(&distance_sensor))
     {
-      float nueva = distancia_cm - centro_viga_cm;
-      if (fallas_seguidas >= FALLAS_PARA_CENTRAR)
-      {
-        posicion_cm = nueva; /* la bola recién aparece: sin filtro */
-      }
-      else
-      {
-        posicion_cm = 0.5f * posicion_cm + 0.5f * nueva; /* pasabajos simple */
-      }
-      lecturas++;
-      fallas_seguidas = 0;
+        distance_cm = hcsr04_get_distance_cm(&distance_sensor);
+        if (distance_cm >= 2.0f && distance_cm <= distancia_max_cm)
+        {
+            float nueva = distance_cm - centro_viga_cm;
+            if (fallas_seguidas >= FALLAS_PARA_CENTRAR)
+                posicion_cm = nueva;                  /* recien aparece: sin filtro */
+            else
+                posicion_cm = 0.5f * posicion_cm + 0.5f * nueva; /* pasabajos simple */
+            lecturas_distancia++;
+            fallas_seguidas = 0U;
+        }
+        else
+        {
+            errores_distancia++;
+            if (fallas_seguidas < FALLAS_PARA_CENTRAR) fallas_seguidas++;
+        }
     }
+    else if (medicion_en_curso)
+    {
+        /* No llego el eco en todo un Ts: cancelar la captura. */
+        HAL_TIM_IC_Stop_IT(distance_sensor.htim, distance_sensor.IC_Channel);
+        errores_distancia++;
+        if (fallas_seguidas < FALLAS_PARA_CENTRAR) fallas_seguidas++;
+    }
+
+    hcsr04_start_measurement(&distance_sensor);
+    medicion_en_curso = true;
+    return posicion_cm;
+}
+
+static void Update_Leds(void)
+{
+    bool sin_pelota = fallas_seguidas >= FALLAS_PARA_CENTRAR;
+    bool centrada = !sin_pelota && posicion_cm < 2.0f && posicion_cm > -2.0f;
+
+    HAL_GPIO_WritePin(GPIOD, LD5_Pin, sin_pelota ? GPIO_PIN_SET : GPIO_PIN_RESET); /* rojo */
+    HAL_GPIO_WritePin(GPIOD, LD4_Pin, centrada ? GPIO_PIN_SET : GPIO_PIN_RESET);   /* verde */
+    HAL_GPIO_WritePin(GPIOD, LD6_Pin, modo == 1U ? GPIO_PIN_SET : GPIO_PIN_RESET); /* azul */
+}
+
+/* ---------- Consola serie (USART2 por el USB del ST-LINK) ----------
+ * Telemetria: una linea CSV por Ts -> "ms,modo,distancia,posicion,angulo,servo".
+ * Comandos: una linea "nombre valor" terminada en Enter. */
+
+static uint8_t rx_byte;
+static char linea_comando[32];
+static volatile uint8_t largo_comando = 0;
+static volatile bool comando_listo = false;
+
+static void EnviarTexto(const char *texto)
+{
+    HAL_UART_Transmit(&huart2, (const uint8_t *)texto, (uint16_t)strlen(texto), 10);
+}
+
+static void EnviarTelemetria(uint32_t tiempo_ms)
+{
+    char texto[64];
+    snprintf(texto, sizeof(texto), "%lu,%lu,%.1f,%.2f,%.2f,%ld\r\n",
+             (unsigned long)tiempo_ms, (unsigned long)modo, distance_cm,
+             posicion_cm, salida_angulo, (long)servo_us);
+    EnviarTexto(texto);
+}
+
+static void ProcesarComando(char *linea)
+{
+    char respuesta[48];
+    char *espacio = strchr(linea, ' ');
+    if (espacio == NULL)
+    {
+        EnviarTexto("falta el valor (ej: kp 3)\r\n");
+        return;
+    }
+    *espacio = '\0';
+    float valor = strtof(espacio + 1, NULL);
+
+    if      (strcmp(linea, "modo") == 0)    modo = (uint32_t)valor;
+    else if (strcmp(linea, "kp") == 0)      pid_bola.kp = valor;
+    else if (strcmp(linea, "ki") == 0)      pid_bola.ki = valor;
+    else if (strcmp(linea, "kd") == 0)      pid_bola.kd = valor;
+    else if (strcmp(linea, "centro") == 0)  centro_viga_cm = valor;
+    else if (strcmp(linea, "sentido") == 0) sentido = valor;
+    else if (strcmp(linea, "servo") == 0)   servo_centro_us = (int32_t)valor;
+    else if (strcmp(linea, "max") == 0)     distancia_max_cm = valor;
     else
     {
-      errores++; /* eco fuera de rango: lectura descartada */
-      if (fallas_seguidas < FALLAS_PARA_CENTRAR) fallas_seguidas++;
+        snprintf(respuesta, sizeof(respuesta), "no entiendo: %s\r\n", linea);
+        EnviarTexto(respuesta);
+        return;
     }
-  }
-  else if (medicion_en_curso)
-  {
-    /* No llegó el eco en todo un Ts: cancelar la captura colgada */
-    HAL_TIM_IC_Stop_IT(sensor_distancia.htim, sensor_distancia.IC_Channel);
-    errores++;
-    if (fallas_seguidas < FALLAS_PARA_CENTRAR) fallas_seguidas++;
-  }
-
-  hcsr04_start_measurement(&sensor_distancia);
-  medicion_en_curso = 1;
-
-  return posicion_cm;
+    snprintf(respuesta, sizeof(respuesta), "ok %s = %.3f\r\n", linea, valor);
+    EnviarTexto(respuesta);
 }
 
-static void ActualizarLedsEstado(void)
+/* La HAL llama a esto por cada byte recibido: junta la linea y avisa al loop. */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  uint8_t sin_bola = (fallas_seguidas >= FALLAS_PARA_CENTRAR);
-  uint8_t centrada = (!sin_bola && posicion_cm > -2.0f && posicion_cm < 2.0f);
-
-  HAL_GPIO_WritePin(LED_ROJO_GPIO_Port, LED_ROJO_Pin,
-                    sin_bola ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LED_VERDE_GPIO_Port, LED_VERDE_Pin,
-                    centrada ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LED_AZUL_GPIO_Port, LED_AZUL_Pin,
-                    (modo == 1) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    if (huart->Instance == USART2)
+    {
+        if (rx_byte == '\n' || rx_byte == '\r')
+        {
+            if (largo_comando > 0 && !comando_listo)
+            {
+                linea_comando[largo_comando] = '\0';
+                comando_listo = true;
+            }
+        }
+        else if (largo_comando < sizeof(linea_comando) - 1 && !comando_listo)
+        {
+            linea_comando[largo_comando++] = (char)rx_byte;
+        }
+        HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+    }
 }
+/* ---------- fin consola ---------- */
 
 int main(void)
 {
-  /* Inicialización generada por CubeMX: HAL, reloj y periféricos */
-  HAL_Init();
-  SystemClock_Config();
-  MX_GPIO_Init();
-  MX_TIM2_Init();
-  MX_TIM4_Init();
+    HAL_Init();
+    SystemClock_Config();
 
-  /* HC-SR04 igual que en el laboratorio 3 */
-  sensor_distancia.htim       = &htim2;
-  sensor_distancia.IC_Channel = TIM_CHANNEL_2;
-  sensor_distancia.Trig_Port  = TRIG_GPIO_Port;
-  sensor_distancia.Trig_Pin   = TRIG_Pin;
-  hcsr04_init(&sensor_distancia);
+    MX_GPIO_Init();
+    MX_TIM3_Init();
+    MX_USART2_UART_Init();
+    Servo_Init();
+    ActualizarServo(0.0f);
 
-  /* Arrancar el PWM del servo con la viga horizontal */
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
-  ActualizarServo(0.0f);
+    distance_sensor.htim = &htim3;
+    distance_sensor.IC_Channel = TIM_CHANNEL_4;
+    distance_sensor.Trig_Port = GPIOB;
+    distance_sensor.Trig_Pin = GPIO_PIN_0;
+    hcsr04_init(&distance_sensor);
 
-  /* Ganancias iniciales de la guía; se afinan en vivo (explicacion.md) */
-  PID_Init(&pid_bola, 1.5f, 0.2f, 0.05f, TS_MS / 1000.0f,
-           ANGULO_MAX, -ANGULO_MAX);
+    /* Ganancias ajustadas en la maqueta: Kp=3, Ki=0.2, Kd=0.005 (el PDF usa
+     * Kp=1.5, Ki=0.2, Kd=0.05). Limites +/- 15 grados.
+     * Ts = 0.05 s para coincidir con TS_MS. */
+    PID_Init(&pid_bola, 3.0f, 0.2f, 0.005f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
 
-  uint32_t tiempo_anterior = HAL_GetTick();
+    HAL_UART_Receive_IT(&huart2, &rx_byte, 1); /* consola: arrancar la recepcion */
 
-  while (1)
-  {
-    uint32_t tiempo_actual = HAL_GetTick();
+    float setpoint_centro = 0.0f; /* Centro de la viga */
+    uint32_t tiempo_anterior = HAL_GetTick();
 
-    /* Lazo de control no bloqueante: corre una vez cada TS_MS */
-    if (tiempo_actual - tiempo_anterior >= TS_MS)
+    while (1)
     {
-      tiempo_anterior = tiempo_actual;
+        uint32_t tiempo_actual = HAL_GetTick();
 
-      float posicion_actual = LeerSensorDistancia();
+        /* Ejecucion determinista no bloqueante */
+        if ((tiempo_actual - tiempo_anterior) >= TS_MS)
+        {
+            tiempo_anterior = tiempo_actual;
 
-      if (modo == 1 && fallas_seguidas < FALLAS_PARA_CENTRAR)
-      {
-        salida_angulo = PID_Compute(&pid_bola, setpoint_cm, posicion_actual);
-      }
-      else
-      {
-        /* Solo midiendo, o sin ver la bola: viga horizontal y PID
-           reiniciado para que no arrastre historia vieja */
-        salida_angulo = 0.0f;
-        pid_bola.integral = 0.0f;
-        pid_bola.error_previo = setpoint_cm - posicion_actual;
-      }
+            float posicion_actual = LeerSensorDistancia();
 
-      ActualizarServo(salida_angulo);
-      ActualizarLedsEstado();
+            if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR)
+            {
+                salida_angulo = PID_Compute(&pid_bola, setpoint_centro, posicion_actual);
+            }
+            else if (modo == 2U)
+            {
+                /* Prueba de sentido: +10 grados fijos es lo que el PID pide cuando
+                 * la pelota esta cerca del sensor. La pelota debe rodar ALEJANDOSE
+                 * del sensor. Si rueda hacia el sensor, poner sentido = -1. */
+                salida_angulo = 10.0f;
+                pid_bola.integral = 0.0f;
+                pid_bola.error_previo = setpoint_centro - posicion_actual;
+            }
+            else
+            {
+                /* Midiendo, o sin ver la pelota: viga horizontal y PID reiniciado. */
+                salida_angulo = 0.0f;
+                pid_bola.integral = 0.0f;
+                pid_bola.error_previo = setpoint_centro - posicion_actual;
+            }
+            ActualizarServo(salida_angulo);
+
+            EnviarTelemetria(tiempo_actual); /* consola: una linea por Ts */
+        }
+
+        /* consola: procesar el comando juntado por la interrupcion */
+        if (comando_listo)
+        {
+            ProcesarComando(linea_comando);
+            largo_comando = 0;
+            comando_listo = false;
+        }
+
+        Update_Leds();
     }
-  }
 }
 
-/* La HAL llama a esto en cada captura del timer; se lo pasamos a la
-   librería del HC-SR04, que procesa los flancos del Echo. */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-  hcsr04_tim_ic_callback(&sensor_distancia, htim);
+    hcsr04_tim_ic_callback(&distance_sensor, htim);
 }
-
-/* ---- Código generado por CubeMX (igual que en Core/Src/main.c) ---------- */
 
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  /** Configure the main internal regulator output voltage
+  */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 192;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
 
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
     Error_Handler();
   }
@@ -232,3 +350,9 @@ void Error_Handler(void)
   {
   }
 }
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line)
+{
+}
+#endif /* USE_FULL_ASSERT */

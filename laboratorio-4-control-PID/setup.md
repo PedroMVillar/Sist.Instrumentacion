@@ -2,32 +2,39 @@
 
 ## Cableado
 
-### HC-SR04 (igual que en el lab 3)
+### HC-SR04
 
 | Pin del sensor | Va a | Nota |
 |---|---|---|
 | VCC | 5V de la placa | El sensor necesita 5 V |
-| TRIG | `PA2` | |
-| ECHO | `PA1` | El pin es tolerante a 5 V |
+| TRIG | `PB0` | |
+| ECHO | `PB1` | El pin es tolerante a 5 V |
 | GND | GND | |
 
-El sensor va montado en un extremo de la viga, apuntando a la bola.
+El sensor va montado en un extremo de la viga, apuntando a la pelota.
 
 ### Servo
 
 | Cable del servo | Va a | Nota |
 |---|---|---|
-| Señal (naranja/amarillo) | `PB6` | |
+| Señal (naranja/amarillo) | `PA1` | |
 | V+ (rojo) | 5 V | Si el servo tiembla o la placa se resetea, alimentarlo con una fuente de 5 V aparte |
 | GND (marrón/negro) | GND | **Siempre GND común con la placa**, aunque la fuente sea externa |
+
+### Consola
+
+Nada que cablear: usa la UART que el ST-LINK de la placa saca por el mismo
+USB (USART2 en PA2/PA3). Al conectar el USB aparece un puerto COM en el
+Administrador de dispositivos ("STMicroelectronics STLink Virtual COM Port").
 
 ## Configuración (ya está en `firmware.ioc`)
 
 | Periférico | Configuración | Para qué |
 |---|---|---|
-| `TIM2` | PSC `16-1` (tick de 1 µs), canal 2 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
-| `TIM4` | PSC `16-1` (tick de 1 µs), ARR `20000-1` (período 20 ms), canal 1 PWM | Pulso del servo a 50 Hz; el ancho en µs va directo al comparador |
-| Reloj | HSI 16 MHz sin PLL | Igual que los labs anteriores |
+| Reloj | HSI + PLL a 48 MHz | Los timers de APB1 reciben 24 MHz |
+| `TIM3` | PSC `24-1` (tick de 1 µs), canal 4 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
+| `TIM2` | Se configura a mano en `main_balancin.c` (`Servo_Init`), canal 2 PWM en PA1 | Pulso del servo |
+| `USART2` | 115200, 8N1, interrupción de recepción | Consola por el USB del ST-LINK |
 
 ## Compilar y grabar (VS Code)
 
@@ -36,17 +43,54 @@ El sensor va montado en un extremo de la viga, apuntando a la bola.
 3. Task **Compilar** (o `Ctrl+Shift+B`).
 4. Conectar el USB mini del ST-LINK (CN1) y correr la task **Grabar en la placa**.
 
+## La consola
+
+Con la placa grabada y el USB conectado:
+
+```
+pip install pyserial matplotlib        (solo la primera vez)
+python consola/consola.py COM5         (poner el COM que aparezca en tu PC)
+```
+
+Se abren dos cosas: la terminal, que muestra en vivo la telemetría
+(`modo`, `distancia`, `posición`, `ángulo`, `servo`) y una ventana con el
+**gráfico en tiempo real** de la posición de la pelota respecto del centro.
+Ahí se ve cómo oscila y se va estabilizando cuando el PID controla.
+
+Lo que escribas en la terminal va a la placa como comando `nombre valor`:
+
+| Comando | Qué cambia | Ejemplo |
+|---|---|---|
+| `modo` | 0 = solo medir, 1 = PID, 2 = prueba de sentido | `modo 1` |
+| `kp` / `ki` / `kd` | las ganancias del PID | `kp 3` |
+| `centro` | distancia del sensor al centro de la viga (cm) | `centro 28.5` |
+| `sentido` | 1 o -1, para qué lado corrige el servo | `sentido -1` |
+| `servo` | pulso con el que la viga queda horizontal (µs) | `servo 1200` |
+| `max` | distancia máxima válida del sensor (cm) | `max 55` |
+
+La placa contesta `ok kp = 3.000` a cada comando.
+
 ## Primera prueba, paso a paso
 
-El programa arranca en **modo 0**: solo mide, con la viga horizontal. Todo se ajusta en vivo desde el debugger (`F5` y cargar en Live Expressions: `modo`, `distancia_cm`, `posicion_cm`, `centro_viga_cm`, `sentido`, `servo_centro_us`, `salida_angulo`, `pid_bola`).
+El programa arranca en **modo 0** (solo mide, viga horizontal) y con los
+valores que ya anduvieron en la maqueta: `servo 1200`, `sentido -1`,
+`centro 28.5`, Kp=3, Ki=0.2, Kd=0.005.
 
-Los LEDs dicen en qué estado está: **rojo** = no ve la bola, **verde** = bola centrada (±2 cm), **azul** = modo control activo.
+1. **Viga horizontal.** Grabar, abrir la consola y mirar la viga: si no
+   queda horizontal, ajustar con `servo 1250`, `servo 1150`... hasta que quede.
+2. **El sensor ve la pelota.** Ponerla en la viga: el LED rojo se apaga y la
+   distancia de la consola tiene que seguirla al moverla con la mano. Si
+   marca cualquier cosa, revisar TRIG/ECHO.
+3. **Verificar el centro.** Con la pelota quieta en el medio, la posición
+   tiene que marcar cerca de 0. Si no, mandar la distancia leída con `centro`.
+4. **Verificar el sentido.** `modo 2` con la pelota cerca del sensor: la viga
+   se inclina fija y la pelota tiene que rodar **alejándose** del sensor. Si
+   rueda hacia el sensor, cambiar el signo con `sentido 1` (o `-1`). Volver a `modo 0`.
+5. **Controlar.** `modo 1`: debería centrarla. En el gráfico se ve la
+   oscilación achicándose. Si oscila de más o queda corta, tocar `kp`, `ki`,
+   `kd` (procedimiento en [`explicacion.md`](./explicacion.md)).
+6. **Guardar lo encontrado.** Los valores que funcionaron se pasan a los
+   valores iniciales de `firmware/app/main_balancin.c` para que queden grabados.
 
-1. **Viga horizontal.** Grabar y mirar la viga: si no queda horizontal, ajustar `servo_centro_us` en vivo hasta que quede (valores típicos: 1300 a 1700).
-2. **El sensor ve la bola.** Poner la bola en la viga: el LED rojo se apaga y `distancia_cm` tiene que seguirla cuando la movés con la mano. Si marca cualquier cosa, revisar TRIG/ECHO.
-3. **Medir el centro.** Con la bola quieta en el medio de la viga, leer `distancia_cm` y cargar ese valor en `centro_viga_cm`. Desde ahí `posicion_cm` queda en cero con la bola centrada. Ajustar `distancia_max_cm` al largo útil real si hace falta.
-4. **Verificar el sentido.** Poner `modo = 1` con la bola a un costado: la viga tiene que inclinarse para empujarla hacia el centro. Si la empuja para afuera, poner `sentido = -1`.
-5. **Controlar.** Con el sentido correcto ya debería intentar centrarla (arranca con las ganancias de la guía: Kp=1.5, Ki=0.2, Kd=0.05). Si oscila o queda corta, sintonizar con el procedimiento de [`explicacion.md`](./explicacion.md) editando `pid_bola.kp/ki/kd` en vivo.
-6. **Guardar lo encontrado.** Los valores que funcionaron (`centro_viga_cm`, `servo_centro_us`, `sentido`, las ganancias) se pasan a los valores iniciales en `firmware/app/main_balancin.c` para que queden grabados.
-
-Si en cualquier momento la bola se va de la viga o el sensor la pierde, el programa solo pone la viga horizontal y resetea el PID (LED rojo encendido); al volver a verla, retoma.
+Si la pelota se va de la viga o el sensor la pierde, el programa solo pone la
+viga horizontal y resetea el PID (LED rojo encendido); al volver a verla, retoma.
