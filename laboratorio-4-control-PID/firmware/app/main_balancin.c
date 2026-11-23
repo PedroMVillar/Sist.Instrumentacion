@@ -34,7 +34,7 @@
 #define SERVO_PERIODO_MS     20U   /* el servo recibe un pulso cada 20 ms (50 Hz) */
 #define ENVIO_MS             50U   /* grafico: una muestra cada 50 ms (igual que Ts,
                                       mas rapido repetiria el mismo dato del sensor) */
-#define LOG_EXTENDIDO        0     /* 0: "tiempo_ms,posicion_cm" (lo que espera grafico.py)
+#define LOG_EXTENDIDO        1     /* 0: "tiempo_ms,posicion_cm"
                                       1: "tiempo_ms,posicion_cm,setpoint_cm,salida_grados"
                                          (para identificar el lazo con los ensayos de escalon) */
 /* ---------- Ajustes (editables en Live Expressions) ---------- */
@@ -45,7 +45,7 @@ volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
 volatile int32_t servo_centro_us = 1315; /* viga horizontal en NUESTRA maqueta (2026-11-20): debajo de 1240 la pelota
                                             se aleja del sensor, arriba de 1390 va hacia el sensor; 1315 es el medio */
 volatile float sentido = -1.0f;          /* -1 comprobado en esta maqueta */
-volatile float banda_cm = 1.0f;          /* region de aceptacion: +/- cm alrededor del centro; 0 = apagada */
+volatile float banda_cm = 0.0f;          /* zona muerta: +/- cm alrededor del setpoint; 0 = apagada (asi para el ensayo de escalon) */
 volatile float velocidad_servo = 150.0f; /* grados/s del servo; 0 = de golpe; menos = mas lento (con 60 llegaba tarde y oscilaba) */
 /* ---------- Valores para mirar ---------- */
 volatile float distance_cm = 0.0f;   /* ultima lectura cruda del sensor */
@@ -283,13 +283,15 @@ int main(void)
     distance_sensor.Trig_Pin = GPIO_PIN_0;
     hcsr04_init(&distance_sensor);
 
-    /* Ganancias de NUESTRA maqueta (2026-11-20): Kp=2.5, Ki=0.3, Kd=0.8
-     * (punto de partida; se reemplazan por las obtenidas del modelo).
+    /* Ganancias para el ENSAYO DE ESCALON (2026-11-23): Kp=1.5, Ki=0, Kd=0.8.
+     * Tienen que ser iguales a las de la seccion 1 de matlab/identificar_lazo_balancin.m.
+     * Antes, a prueba y error, se usaba Kp=2.5, Ki=0.3, Kd=0.8 con banda de 1 cm.
+     * Despues del ensayo se reemplazan por las que salgan del modelo.
      * En esta maqueta el brazo del servo inclina poco la viga, por eso hacen
      * falta mas ganancia y mas recorrido que en la del companero
      * (Kp=1.7, Ki=0.1, Kd=0.35 con +/-20 grados). El PDF usa Kp=1.5, Ki=0.2, Kd=0.05.
      * Limites +/- LIMITE_GRADOS. Ts = 0.05 s = TS_MS. */
-    PID_Init(&pid_bola, 2.5f, 0.3f, 0.8f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
+    PID_Init(&pid_bola, 1.5f, 0.0f, 0.8f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
 
     Grafico_Init();        /* grafico: desde aca TIM4 manda una muestra cada ENVIO_MS */
 

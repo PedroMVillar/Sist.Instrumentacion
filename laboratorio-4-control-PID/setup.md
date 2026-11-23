@@ -80,11 +80,11 @@ cambiar uno, se edita su valor ahí mismo, sin recompilar.
 |---|---|---|
 | `modo` | 0 = solo medir, 1 = PID | 1 |
 | `setpoint_cm` | posición pedida respecto del centro (cm); para ensayos de escalón | 0 |
-| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID | 2.5 / 0.3 / 0.8 |
+| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID (las del ensayo de escalón) | 1.5 / 0 / 0.8 |
 | `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 33 |
 | `sentido` | 1 o -1, para qué lado corrige el servo | -1 |
 | `servo_centro_us` | pulso con el que la viga queda horizontal (µs) | 1315 |
-| `banda_cm` | zona muerta alrededor del centro (cm); 0 = apagada | 1 |
+| `banda_cm` | zona muerta alrededor del centro (cm); 0 = apagada | 0 |
 | `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 150 |
 | `distancia_max_cm` | distancia máxima válida del sensor (cm) | 55 |
 
