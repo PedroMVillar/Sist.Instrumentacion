@@ -32,9 +32,13 @@ La ecuación de la guía, en su forma estándar:
 
 `Ti` y `Td` son tiempos físicos (cuánto tarda el I en igualar al P, cuánto "proyecta hacia el futuro" el D). En el código usamos la forma algorítmica: **Ki = Kp/Ti** y **Kd = Kp·Td**.
 
-## Dos detalles del código de `pid.c`
+## Detalles del código de `pid.c`
 
-**Anti-windup.** El servo puede dar ±15 grados y nada más. Si la bola queda lejos un rato, la integral acumula y acumula un error que el servo no puede corregir; cuando la bola al fin cruza el centro, toda esa acumulación tarda muchísimo en descargarse y el sistema reacciona tarde. La solución: si el término I pide más que el límite del servo, se recorta el acumulador. La integral nunca "recuerda" más de lo que el actuador puede hacer.
+**Anti-windup.** El servo tiene un límite de grados. Si la bola queda lejos un rato, la integral acumula un error que el servo no puede corregir, y cuando la bola al fin cruza el centro toda esa acumulación tarda muchísimo en descargarse. Por eso, si la salida ya está al tope y el error empuja hacia ese mismo tope, la integral no acumula. Además la integral se guarda ya multiplicada por `ki` (en grados), así se puede cambiar `ki` en vivo sin que la salida pegue un salto.
+
+**Derivada sobre la medida.** El D usa la velocidad de la bola y no la del error. Con el setpoint fijo da lo mismo, pero si el setpoint cambia de golpe (ensayo de escalón) no aparece un golpe en el servo. Esa velocidad se suaviza (70% la anterior y 30% la nueva) porque el sensor tiene ruido de unos 0,4 cm y al dividir por Ts el ruido se agranda.
+
+**Zona muerta.** Si la bola está a menos de `banda_cm` del setpoint se la da por centrada: P no empuja y la integral no acumula. El D sigue frenando.
 
 **Capa de hardware.** El PID no sabe qué sensor ni qué servo hay: solo ve `LeerSensorDistancia()` y `ActualizarServo()`. Si mañana cambia el sensor, el algoritmo no se toca. Es la misma idea de librerías del lab 3.
 

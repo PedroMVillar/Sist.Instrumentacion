@@ -5,8 +5,9 @@
  * LeerSensorDistancia() y ActualizarServo(), como pide la seccion 4.
  *
  * Valores editables en Live Expressions mientras corre:
- *   modo (0 = solo medir, servo a 0 grados; 1 = PID; 2 = prueba de sentido),
- *   centro_viga_cm,
+ *   modo (0 = solo medir, servo a 0 grados; 1 = PID),
+ *   setpoint_cm (posicion pedida respecto del centro; para ensayos de escalon),
+ *   centro_viga_cm, banda_cm,
  *   pid_bola.kp / pid_bola.ki / pid_bola.kd, servo_centro_us, sentido.
  *
  * Grafico por UART (agregado): cada ENVIO_MS el TIM4 interrumpe y manda por
@@ -33,13 +34,17 @@
 #define SERVO_PERIODO_MS     20U   /* el servo recibe un pulso cada 20 ms (50 Hz) */
 #define ENVIO_MS             50U   /* grafico: una muestra cada 50 ms (igual que Ts,
                                       mas rapido repetiria el mismo dato del sensor) */
+#define LOG_EXTENDIDO        0     /* 0: "tiempo_ms,posicion_cm" (lo que espera grafico.py)
+                                      1: "tiempo_ms,posicion_cm,setpoint_cm,salida_grados"
+                                         (para identificar el lazo con los ensayos de escalon) */
 /* ---------- Ajustes (editables en Live Expressions) ---------- */
-volatile uint32_t modo = 1;              /* 0 = medir, 1 = controlar, 2 = probar sentido */
+volatile uint32_t modo = 1;              /* 0 = medir, 1 = controlar */
+volatile float setpoint_cm = 0.0f;       /* posicion pedida respecto del centro de la viga (0 = centro) */
 volatile float centro_viga_cm = 33.0f;   /* medio de NUESTRA viga: la pelota 2 cm antes del medio marca 31 cm (2026-11-20) */
 volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
 volatile int32_t servo_centro_us = 1315; /* viga horizontal en NUESTRA maqueta (2026-11-20): debajo de 1240 la pelota
                                             se aleja del sensor, arriba de 1390 va hacia el sensor; 1315 es el medio */
-volatile float sentido = -1.0f;          /* -1 comprobado con modo 2 en esta maqueta */
+volatile float sentido = -1.0f;          /* -1 comprobado en esta maqueta */
 volatile float banda_cm = 1.0f;          /* region de aceptacion: +/- cm alrededor del centro; 0 = apagada */
 volatile float velocidad_servo = 150.0f; /* grados/s del servo; 0 = de golpe; menos = mas lento (con 60 llegaba tarde y oscilaba) */
 /* ---------- Valores para mirar ---------- */
@@ -69,7 +74,7 @@ void SystemClock_Config(void);
 /* ---------- Grafico por UART: TIM4 interrumpe cada ENVIO_MS ---------- */
 /* TIM4 recibe 48 MHz; prescaler 48000-1 -> 1 ms por cuenta. */
 static TIM_HandleTypeDef htim4;
-static char linea_grafico[32];
+static char linea_grafico[64];
 
 static void Grafico_Init(void)
 {
@@ -99,8 +104,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM4)
     {
+#if LOG_EXTENDIDO
+        int largo = snprintf(linea_grafico, sizeof(linea_grafico), "%lu,%.2f,%.2f,%.2f\r\n",
+                             (unsigned long)HAL_GetTick(), posicion_cm, setpoint_cm, salida_angulo);
+#else
         int largo = snprintf(linea_grafico, sizeof(linea_grafico), "%lu,%.2f\r\n",
                              (unsigned long)HAL_GetTick(), posicion_cm);
+#endif
         /* _IT: no espera a que salga la linea, la UART la manda sola por
          * interrupcion. Si la anterior todavia no termino, esta se saltea. */
         HAL_UART_Transmit_IT(&huart2, (uint8_t *)linea_grafico, (uint16_t)largo);
@@ -274,7 +284,7 @@ int main(void)
     hcsr04_init(&distance_sensor);
 
     /* Ganancias de NUESTRA maqueta (2026-11-20): Kp=2.5, Ki=0.3, Kd=0.8
-     * (con el D suavizado de pid.c: la pelota queda 100% del tiempo dentro de 1 cm).
+     * (punto de partida; se reemplazan por las obtenidas del modelo).
      * En esta maqueta el brazo del servo inclina poco la viga, por eso hacen
      * falta mas ganancia y mas recorrido que en la del companero
      * (Kp=1.7, Ki=0.1, Kd=0.35 con +/-20 grados). El PDF usa Kp=1.5, Ki=0.2, Kd=0.05.
@@ -283,7 +293,6 @@ int main(void)
 
     Grafico_Init();        /* grafico: desde aca TIM4 manda una muestra cada ENVIO_MS */
 
-    float setpoint_centro = 0.0f; /* Centro de la viga */
     uint32_t tiempo_anterior = HAL_GetTick();
 
     while (1)
@@ -299,24 +308,14 @@ int main(void)
 
             if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR)
             {
-                pid_bola.banda = banda_cm; /* region de aceptacion, editable en vivo */
-                salida_angulo = PID_Compute(&pid_bola, setpoint_centro, posicion_actual);
-            }
-            else if (modo == 2U)
-            {
-                /* Prueba de sentido: +10 grados fijos es lo que el PID pide cuando
-                 * la pelota esta cerca del sensor. La pelota debe rodar ALEJANDOSE
-                 * del sensor. Si rueda hacia el sensor, poner sentido = -1. */
-                salida_angulo = 10.0f;
-                pid_bola.integral = 0.0f;
-                pid_bola.error_previo = setpoint_centro - posicion_actual;
+                pid_bola.banda = banda_cm; /* zona muerta, editable en vivo */
+                salida_angulo = PID_Compute(&pid_bola, setpoint_cm, posicion_actual);
             }
             else
             {
                 /* Midiendo, o sin ver la pelota: viga horizontal y PID reiniciado. */
                 salida_angulo = 0.0f;
-                pid_bola.integral = 0.0f;
-                pid_bola.error_previo = setpoint_centro - posicion_actual;
+                PID_Reset(&pid_bola, posicion_actual);
             }
             ActualizarServo(salida_angulo);
         }

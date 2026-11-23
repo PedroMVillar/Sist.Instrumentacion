@@ -78,13 +78,14 @@ cambiar uno, se edita su valor ahí mismo, sin recompilar.
 
 | Variable | Qué es | Valor inicial |
 |---|---|---|
-| `modo` | 0 = solo medir, 1 = PID, 2 = prueba de sentido | 1 |
-| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID | 1.7 / 0.1 / 0.35 |
-| `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 28.5 |
+| `modo` | 0 = solo medir, 1 = PID | 1 |
+| `setpoint_cm` | posición pedida respecto del centro (cm); para ensayos de escalón | 0 |
+| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID | 2.5 / 0.3 / 0.8 |
+| `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 33 |
 | `sentido` | 1 o -1, para qué lado corrige el servo | -1 |
-| `servo_centro_us` | pulso con el que la viga queda horizontal (µs) | 1281 |
-| `banda_cm` | región de aceptación alrededor del centro (cm); 0 = apagada | 1 |
-| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 100 |
+| `servo_centro_us` | pulso con el que la viga queda horizontal (µs) | 1315 |
+| `banda_cm` | zona muerta alrededor del centro (cm); 0 = apagada | 1 |
+| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 150 |
 | `distancia_max_cm` | distancia máxima válida del sensor (cm) | 55 |
 
 Para mirar: `distance_cm` (lectura cruda), `distancia_filtrada_cm` (mediana
@@ -102,9 +103,9 @@ anduvieron en la maqueta. Si algo no va, poner `modo` en 0 y seguir estos pasos:
    cualquier cosa, revisar TRIG/ECHO.
 3. **Verificar el centro.** Con la pelota quieta en el medio, `posicion_cm`
    tiene que dar cerca de 0. Si no, poner en `centro_viga_cm` la distancia leída.
-4. **Verificar el sentido.** `modo` 2 con la pelota cerca del sensor: la viga
-   se inclina fija y la pelota tiene que rodar **alejándose** del sensor. Si
-   rueda hacia el sensor, cambiar el signo de `sentido`. Volver a `modo` 0.
+4. **Verificar el sentido.** Con `modo` 1, acercar la pelota al sensor: la viga
+   tiene que inclinarse para que ruede **alejándose** del sensor. Si la empuja
+   hacia el sensor, cambiar el signo de `sentido`.
 5. **Controlar.** `modo` 1: debería centrarla (LED verde dentro de la banda).
    Si oscila de más o queda corta, tocar `kp`, `ki`, `kd` (procedimiento en
    [`explicacion.md`](./explicacion.md)).
