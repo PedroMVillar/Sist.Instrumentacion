@@ -4,56 +4,108 @@
  * El PID (pid.c) es el del PDF. Este archivo agrega el hardware:
  * LeerSensorDistancia() y ActualizarServo(), como pide la seccion 4.
  *
- * Todo se ajusta por la consola serie (USART2, 115200, por el USB del
- * ST-LINK). La placa manda una linea de telemetria por cada Ts y acepta
- * comandos "nombre valor", por ejemplo:
- *   modo 1      (0 = solo medir, 1 = PID, 2 = prueba de sentido)
- *   kp 3        ki 0.2       kd 0.005
- *   centro 28.5     sentido -1     servo 1200     max 55
+ * Valores editables en Live Expressions mientras corre:
+ *   modo (0 = solo medir, servo a 0 grados; 1 = PID; 2 = prueba de sentido),
+ *   centro_viga_cm,
+ *   pid_bola.kp / pid_bola.ki / pid_bola.kd, servo_centro_us, sentido.
+ *
+ * Grafico por UART (agregado): cada ENVIO_MS el TIM4 interrumpe y manda por
+ * USART2 (PA2 = TX, 115200) una linea "tiempo_ms,posicion_cm". Del lado de
+ * la PC, grafico/grafico.py la dibuja en tiempo real.
  */
 #include "main.h"
 #include "gpio.h"
 #include "tim.h"
 #include "usart.h"
-#include "usb_device.h"
-#include "usbd_cdc_if.h"
 #include "HC_SR04.h"
 #include "pid.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 
 /* Ts: el PDF recomienda 20 a 50 ms. Se usa 50 ms porque el HC-SR04 necesita
  * tiempo entre disparos (los ecos viejos rebotan) y cada medida usa el periodo. */
 #define TS_MS                50U
-#define LIMITE_GRADOS        15.0f /* +/- 15 grados, como el ejemplo del PDF */
+#define LIMITE_GRADOS        35.0f /* +/- 35 grados. En nuestra maqueta la viga se inclina poco:
+                                      cerca del medio la pelota recien rueda con ~19 grados (2026-11-20). */
 #define US_POR_GRADO         11.1f /* servo tipico: 1000 us para 90 grados */
 #define FALLAS_PARA_CENTRAR  5U
-
-/* ---------- Ajustes (editables por la consola) ---------- */
-volatile uint32_t modo = 0;              /* 0 = medir, 1 = controlar, 2 = probar sentido */
-volatile float centro_viga_cm = 28.5f;   /* medio de la viga, medido con la pelota */
+#define FILTRO_N             5U    /* mediana de las ultimas 5 lecturas (250 ms) */
+#define SERVO_PERIODO_MS     20U   /* el servo recibe un pulso cada 20 ms (50 Hz) */
+#define ENVIO_MS             50U   /* grafico: una muestra cada 50 ms (igual que Ts,
+                                      mas rapido repetiria el mismo dato del sensor) */
+/* ---------- Ajustes (editables en Live Expressions) ---------- */
+volatile uint32_t modo = 1;              /* 0 = medir, 1 = controlar, 2 = probar sentido */
+volatile float centro_viga_cm = 33.0f;   /* medio de NUESTRA viga: la pelota 2 cm antes del medio marca 31 cm (2026-11-20) */
 volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
-volatile int32_t servo_centro_us = 1200; /* pulso con la viga horizontal (medido aprox.) */
+volatile int32_t servo_centro_us = 1315; /* viga horizontal en NUESTRA maqueta (2026-11-20): debajo de 1240 la pelota
+                                            se aleja del sensor, arriba de 1390 va hacia el sensor; 1315 es el medio */
 volatile float sentido = -1.0f;          /* -1 comprobado con modo 2 en esta maqueta */
-
+volatile float banda_cm = 1.0f;          /* region de aceptacion: +/- cm alrededor del centro; 0 = apagada */
+volatile float velocidad_servo = 150.0f; /* grados/s del servo; 0 = de golpe; menos = mas lento (con 60 llegaba tarde y oscilaba) */
 /* ---------- Valores para mirar ---------- */
 volatile float distance_cm = 0.0f;   /* ultima lectura cruda del sensor */
 volatile float posicion_cm = 0.0f;   /* posicion respecto del centro (filtrada) */
+volatile float distancia_filtrada_cm = 0.0f; /* mediana de las ultimas FILTRO_N lecturas */
 volatile float salida_angulo = 0.0f; /* lo que pide el PID, en grados */
-volatile int32_t servo_us = 1700;
+volatile int32_t servo_us = 0;     /* ultimo pulso enviado al servo */
+volatile float angulo_servo = 0.0f;  /* angulo donde esta el servo ahora */
 volatile uint32_t lecturas_distancia = 0, errores_distancia = 0;
 volatile uint32_t fallas_seguidas = FALLAS_PARA_CENTRAR; /* al inicio no hay pelota */
 
-/* Global (static) para poder cambiar kp/ki/kd desde la consola. */
+/* Global (static) solo para poder ver y cambiar kp/ki/kd desde el depurador. */
 static PID_Controller pid_bola;
 
 TIM_HandleTypeDef htim2;
 static HCSR04_HandleTypeDef distance_sensor;
 static bool medicion_en_curso = false;
-
+static float filtro_buffer[FILTRO_N];
+static uint32_t filtro_indice = 0U;
+static uint32_t filtro_cantidad = 0U;
+static float angulo_objetivo = 0.0f;
+static float velocidad_objetivo = 0.0f;
+static uint32_t ultimo_servo_ms = 0U;
 void SystemClock_Config(void);
+
+/* ---------- Grafico por UART: TIM4 interrumpe cada ENVIO_MS ---------- */
+/* TIM4 recibe 48 MHz; prescaler 48000-1 -> 1 ms por cuenta. */
+static TIM_HandleTypeDef htim4;
+static char linea_grafico[32];
+
+static void Grafico_Init(void)
+{
+    __HAL_RCC_TIM4_CLK_ENABLE();
+
+    htim4.Instance = TIM4;
+    htim4.Init.Prescaler = 48000 - 1;
+    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim4.Init.Period = ENVIO_MS - 1;
+    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(&htim4) != HAL_OK) Error_Handler();
+
+    /* Prioridad 1: menos urgente que el eco del sensor (TIM3, prioridad 0) */
+    HAL_NVIC_SetPriority(TIM4_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM4_IRQn);
+    HAL_TIM_Base_Start_IT(&htim4);
+}
+
+void TIM4_IRQHandler(void)
+{
+    HAL_TIM_IRQHandler(&htim4);
+}
+
+/* La HAL la llama cuando TIM4 llega al final de su periodo (cada ENVIO_MS). */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM4)
+    {
+        int largo = snprintf(linea_grafico, sizeof(linea_grafico), "%lu,%.2f\r\n",
+                             (unsigned long)HAL_GetTick(), posicion_cm);
+        /* _IT: no espera a que salga la linea, la UART la manda sola por
+         * interrupcion. Si la anterior todavia no termino, esta se saltea. */
+        HAL_UART_Transmit_IT(&huart2, (uint8_t *)linea_grafico, (uint16_t)largo);
+    }
+}
 
 /* ---------- Servo: TIM2 canal 2 en PA1, 50 Hz ---------- */
 /* TIM2 recibe 48 MHz; prescaler 47 -> 1 us por cuenta; periodo 20000 us. */
@@ -81,24 +133,58 @@ static void Servo_Init(void)
     if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) Error_Handler();
 
     oc.OCMode = TIM_OCMODE_PWM1;
-    oc.Pulse = 1500;
+    oc.Pulse = servo_centro_us; /* arranca con la viga horizontal, sin salto */
     oc.OCPolarity = TIM_OCPOLARITY_HIGH;
     oc.OCFastMode = TIM_OCFAST_DISABLE;
     if (HAL_TIM_PWM_ConfigChannel(&htim2, &oc, TIM_CHANNEL_2) != HAL_OK) Error_Handler();
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 }
 
-/* Angulo en grados (0 = viga horizontal) -> pulso del servo. */
-void ActualizarServo(float angulo)
+/* Escribe ya mismo un angulo en grados (0 = viga horizontal) como pulso. */
+static void Servo_Escribir(float angulo)
 {
-    if (angulo > LIMITE_GRADOS) angulo = LIMITE_GRADOS;
-    if (angulo < -LIMITE_GRADOS) angulo = -LIMITE_GRADOS;
-
     int32_t pulso = servo_centro_us + (int32_t)(sentido * angulo * US_POR_GRADO);
     if (pulso < 700) pulso = 700;    /* rango seguro de un servo chico */
     if (pulso > 2300) pulso = 2300;
     servo_us = pulso;
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint32_t)pulso);
+}
+
+/* Pide al servo ir a "angulo" (grados) moviendose a "velocidad" (grados por
+ * segundo), como pidio el profesor. No espera: Servo_Update() lo va acercando
+ * cada 20 ms. velocidad <= 0 significa ir de golpe. */
+void Servo_Set(float angulo, float velocidad)
+{
+    if (angulo > pid_bola.limite_out_max) angulo = pid_bola.limite_out_max;
+    if (angulo < pid_bola.limite_out_min) angulo = pid_bola.limite_out_min;
+    angulo_objetivo = angulo;
+    velocidad_objetivo = velocidad;
+}
+
+/* Se llama en cada vuelta del while. Cada 20 ms (un periodo del PWM)
+ * avanza el angulo como maximo velocidad * tiempo transcurrido. */
+static void Servo_Update(uint32_t ahora)
+{
+    if ((ahora - ultimo_servo_ms) < SERVO_PERIODO_MS) return;
+    float dt = (ahora - ultimo_servo_ms) / 1000.0f;
+    ultimo_servo_ms = ahora;
+
+    float diferencia = angulo_objetivo - angulo_servo;
+    float paso = velocidad_objetivo * dt;
+    if (velocidad_objetivo <= 0.0f || (diferencia <= paso && diferencia >= -paso))
+        angulo_servo = angulo_objetivo;          /* llega en este paso */
+    else if (diferencia > 0.0f)
+        angulo_servo += paso;
+    else
+        angulo_servo -= paso;
+
+    Servo_Escribir(angulo_servo);
+}
+
+/* La funcion del PDF: mueve el servo a la velocidad elegida en velocidad_servo. */
+void ActualizarServo(float angulo)
+{
+    Servo_Set(angulo, velocidad_servo);
 }
 
 /* Se llama una vez por Ts. Toma el resultado de la medicion lanzada en la
@@ -111,11 +197,32 @@ float LeerSensorDistancia(void)
         distance_cm = hcsr04_get_distance_cm(&distance_sensor);
         if (distance_cm >= 2.0f && distance_cm <= distancia_max_cm)
         {
-            float nueva = distance_cm - centro_viga_cm;
-            if (fallas_seguidas >= FALLAS_PARA_CENTRAR)
-                posicion_cm = nueva;                  /* recien aparece: sin filtro */
+            /* Filtro: mediana de las ultimas FILTRO_N lecturas validas.
+             * El sensor da picos falsos (7% de las lecturas se alejan mas de 3 cm);
+             * la mediana los descarta, un promedio los reparte.
+             * Si la pelota recien aparece, el filtro empieza de cero. */
+            if (fallas_seguidas >= FALLAS_PARA_CENTRAR) filtro_cantidad = 0U;
+            filtro_buffer[filtro_indice] = distance_cm;
+            filtro_indice = (filtro_indice + 1U) % FILTRO_N;
+            if (filtro_cantidad < FILTRO_N) filtro_cantidad++;
+            float orden[FILTRO_N];
+            for (uint32_t i = 0; i < filtro_cantidad; i++)
+            {
+                /* las ultimas filtro_cantidad lecturas, ordenadas (insercion) */
+                float valor = filtro_buffer[(filtro_indice + FILTRO_N - 1U - i) % FILTRO_N];
+                uint32_t j = i;
+                while (j > 0U && orden[j - 1U] > valor)
+                {
+                    orden[j] = orden[j - 1U];
+                    j--;
+                }
+                orden[j] = valor;
+            }
+            if (filtro_cantidad % 2U == 1U)
+                distancia_filtrada_cm = orden[filtro_cantidad / 2U];
             else
-                posicion_cm = 0.5f * posicion_cm + 0.5f * nueva; /* pasabajos simple */
+                distancia_filtrada_cm = 0.5f * (orden[filtro_cantidad / 2U - 1U] + orden[filtro_cantidad / 2U]);
+            posicion_cm = distancia_filtrada_cm - centro_viga_cm;
             lecturas_distancia++;
             fallas_seguidas = 0U;
         }
@@ -141,104 +248,12 @@ float LeerSensorDistancia(void)
 static void Update_Leds(void)
 {
     bool sin_pelota = fallas_seguidas >= FALLAS_PARA_CENTRAR;
-    bool centrada = !sin_pelota && posicion_cm < 2.0f && posicion_cm > -2.0f;
+    bool centrada = !sin_pelota && posicion_cm <= banda_cm && posicion_cm >= -banda_cm;
 
     HAL_GPIO_WritePin(GPIOD, LD5_Pin, sin_pelota ? GPIO_PIN_SET : GPIO_PIN_RESET); /* rojo */
     HAL_GPIO_WritePin(GPIOD, LD4_Pin, centrada ? GPIO_PIN_SET : GPIO_PIN_RESET);   /* verde */
     HAL_GPIO_WritePin(GPIOD, LD6_Pin, modo == 1U ? GPIO_PIN_SET : GPIO_PIN_RESET); /* azul */
 }
-
-/* ---------- Consola serie (USART2 por el USB del ST-LINK) ----------
- * Telemetria: una linea CSV por Ts -> "ms,modo,distancia,posicion,angulo,servo".
- * Comandos: una linea "nombre valor" terminada en Enter. */
-
-static uint8_t rx_byte;
-static char linea_comando[32];
-static volatile uint8_t largo_comando = 0;
-static volatile bool comando_listo = false;
-
-static void EnviarTexto(const char *texto)
-{
-    /* Sale por los dos lados: el USB de la placa (CN5) y la UART en PA2/PA3 */
-    CDC_Transmit_FS((uint8_t *)texto, (uint16_t)strlen(texto));
-    HAL_UART_Transmit(&huart2, (const uint8_t *)texto, (uint16_t)strlen(texto), 10);
-}
-
-static void EnviarTelemetria(uint32_t tiempo_ms)
-{
-    char texto[64];
-    snprintf(texto, sizeof(texto), "%lu,%lu,%.1f,%.2f,%.2f,%ld\r\n",
-             (unsigned long)tiempo_ms, (unsigned long)modo, distance_cm,
-             posicion_cm, salida_angulo, (long)servo_us);
-    EnviarTexto(texto);
-}
-
-static void ProcesarComando(char *linea)
-{
-    char respuesta[48];
-    char *espacio = strchr(linea, ' ');
-    if (espacio == NULL)
-    {
-        EnviarTexto("falta el valor (ej: kp 3)\r\n");
-        return;
-    }
-    *espacio = '\0';
-    float valor = strtof(espacio + 1, NULL);
-
-    if      (strcmp(linea, "modo") == 0)    modo = (uint32_t)valor;
-    else if (strcmp(linea, "kp") == 0)      pid_bola.kp = valor;
-    else if (strcmp(linea, "ki") == 0)      pid_bola.ki = valor;
-    else if (strcmp(linea, "kd") == 0)      pid_bola.kd = valor;
-    else if (strcmp(linea, "centro") == 0)  centro_viga_cm = valor;
-    else if (strcmp(linea, "sentido") == 0) sentido = valor;
-    else if (strcmp(linea, "servo") == 0)   servo_centro_us = (int32_t)valor;
-    else if (strcmp(linea, "max") == 0)     distancia_max_cm = valor;
-    else
-    {
-        snprintf(respuesta, sizeof(respuesta), "no entiendo: %s\r\n", linea);
-        EnviarTexto(respuesta);
-        return;
-    }
-    snprintf(respuesta, sizeof(respuesta), "ok %s = %.3f\r\n", linea, valor);
-    EnviarTexto(respuesta);
-}
-
-/* Junta los bytes que llegan hasta el Enter y avisa al loop. */
-static void ConsolaRecibirByte(uint8_t byte)
-{
-    if (byte == '\n' || byte == '\r')
-    {
-        if (largo_comando > 0 && !comando_listo)
-        {
-            linea_comando[largo_comando] = '\0';
-            comando_listo = true;
-        }
-    }
-    else if (largo_comando < sizeof(linea_comando) - 1 && !comando_listo)
-    {
-        linea_comando[largo_comando++] = (char)byte;
-    }
-}
-
-/* Lo llama usbd_cdc_if.c con cada paquete que llega por el USB. */
-void ConsolaRecibirBuffer(uint8_t *datos, uint32_t largo)
-{
-    for (uint32_t i = 0; i < largo; i++)
-    {
-        ConsolaRecibirByte(datos[i]);
-    }
-}
-
-/* La HAL llama a esto por cada byte recibido por la UART. */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART2)
-    {
-        ConsolaRecibirByte(rx_byte);
-        HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
-    }
-}
-/* ---------- fin consola ---------- */
 
 int main(void)
 {
@@ -247,10 +262,10 @@ int main(void)
 
     MX_GPIO_Init();
     MX_TIM3_Init();
-    MX_USART2_UART_Init();
-    MX_USB_DEVICE_Init();   /* consola por el conector CN5 de la placa */
+    MX_USART2_UART_Init(); /* grafico: UART en PA2/PA3 */
     Servo_Init();
-    ActualizarServo(0.0f);
+    Servo_Escribir(0.0f);
+    ultimo_servo_ms = HAL_GetTick();
 
     distance_sensor.htim = &htim3;
     distance_sensor.IC_Channel = TIM_CHANNEL_4;
@@ -258,12 +273,15 @@ int main(void)
     distance_sensor.Trig_Pin = GPIO_PIN_0;
     hcsr04_init(&distance_sensor);
 
-    /* Ganancias ajustadas en la maqueta: Kp=3, Ki=0.2, Kd=0.005 (el PDF usa
-     * Kp=1.5, Ki=0.2, Kd=0.05). Limites +/- 15 grados.
-     * Ts = 0.05 s para coincidir con TS_MS. */
-    PID_Init(&pid_bola, 3.0f, 0.2f, 0.005f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
+    /* Ganancias de NUESTRA maqueta (2026-11-20): Kp=2.5, Ki=0.3, Kd=0.8
+     * (con el D suavizado de pid.c: la pelota queda 100% del tiempo dentro de 1 cm).
+     * En esta maqueta el brazo del servo inclina poco la viga, por eso hacen
+     * falta mas ganancia y mas recorrido que en la del companero
+     * (Kp=1.7, Ki=0.1, Kd=0.35 con +/-20 grados). El PDF usa Kp=1.5, Ki=0.2, Kd=0.05.
+     * Limites +/- LIMITE_GRADOS. Ts = 0.05 s = TS_MS. */
+    PID_Init(&pid_bola, 2.5f, 0.3f, 0.8f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
 
-    HAL_UART_Receive_IT(&huart2, &rx_byte, 1); /* consola: arrancar la recepcion */
+    Grafico_Init();        /* grafico: desde aca TIM4 manda una muestra cada ENVIO_MS */
 
     float setpoint_centro = 0.0f; /* Centro de la viga */
     uint32_t tiempo_anterior = HAL_GetTick();
@@ -281,6 +299,7 @@ int main(void)
 
             if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR)
             {
+                pid_bola.banda = banda_cm; /* region de aceptacion, editable en vivo */
                 salida_angulo = PID_Compute(&pid_bola, setpoint_centro, posicion_actual);
             }
             else if (modo == 2U)
@@ -300,18 +319,9 @@ int main(void)
                 pid_bola.error_previo = setpoint_centro - posicion_actual;
             }
             ActualizarServo(salida_angulo);
-
-            EnviarTelemetria(tiempo_actual); /* consola: una linea por Ts */
         }
 
-        /* consola: procesar el comando juntado por la interrupcion */
-        if (comando_listo)
-        {
-            ProcesarComando(linea_comando);
-            largo_comando = 0;
-            comando_listo = false;
-        }
-
+        Servo_Update(tiempo_actual);
         Update_Leds();
     }
 }
@@ -363,16 +373,36 @@ void SystemClock_Config(void)
   }
 }
 
+/* USER CODE BEGIN 4 */
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
   }
+  /* USER CODE END Error_Handler_Debug */
 }
-
 #ifdef USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

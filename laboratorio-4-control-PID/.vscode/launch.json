@@ -13,7 +13,9 @@
                 "interface/stlink.cfg",
                 "target/stm32f4x.cfg"
             ],
-            "runToEntryPoint": "main"
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Compilar",
+            "liveWatch": { "enabled": true, "samplesPerSecond": 4 }
         }
     ]
 }

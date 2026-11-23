@@ -50,11 +50,11 @@ El lazo usa `HAL_GetTick()` como en los labs 2 y 3: nada bloquea, el `if` del ti
 
 ## Cómo sintonizar en la maqueta (Ziegler-Nichols)
 
-Todo se hace desde la consola serie (`setup.md`), mandando `kp`, `ki` y `kd` sin recompilar:
+Todo se hace con Live Expressions (`setup.md`), cambiando `pid_bola.kp`, `.ki` y `.kd` sin recompilar:
 
-1. **Aislar el P:** mandar `ki 0` y `kd 0` (con `modo 1` y la maqueta ya verificada según `setup.md`).
+1. **Aislar el P:** poner `ki` y `kd` en 0 (con `modo 1` y la maqueta ya verificada según `setup.md`).
 2. **Buscar la oscilación crítica:** subir `kp` de a poco hasta que la bola oscile de forma sostenida, sin crecer ni amortiguarse. Ese `kp` es la **ganancia crítica Ku**.
-3. **Medir el período:** medir en el gráfico de la consola una oscilación completa de la bola (ida y vuelta). Ese tiempo es el **período crítico Tu**, en segundos.
+3. **Medir el período:** medir en el gráfico (`setup.md`) una oscilación completa de la bola (ida y vuelta). Ese tiempo es el **período crítico Tu**, en segundos.
 4. **Calcular:**
    - `kp = 0.6 × Ku`
    - `ki = kp / (0.5 × Tu)`
@@ -70,7 +70,7 @@ Todo se hace desde la consola serie (`setup.md`), mandando `kp`, `ki` y `kd` sin
 | Queda quieta pero fuera del centro | Falta integral | Subir `ki` de a poco |
 | Tarda mucho en centrarse después de estar lejos | Windup o mucho I | Bajar `ki` (el anti-windup ya ayuda) |
 | El servo tiembla con la bola quieta | Ruido del sensor en el D | Bajar `kd`, o subir Ts |
-| Corrige para el lado equivocado | Signo invertido | Mandar `sentido -1` (o `sentido 1`) por la consola |
+| Corrige para el lado equivocado | Signo invertido | Cambiar el signo de `sentido` |
 
 ## La idea que cierra los cuatro labs
 

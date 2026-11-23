@@ -32,20 +32,12 @@
             "problemMatcher": []
         },
         {
-            "label": "Consola",
+            "label": "Grafico",
             "type": "shell",
             "command": "python",
-            "args": ["consola/consola.py", "${input:puertoCOM}"],
+            "args": ["grafico/grafico.py"],
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": []
-        }
-    ],
-    "inputs": [
-        {
-            "id": "puertoCOM",
-            "type": "promptString",
-            "description": "Puerto COM del ST-LINK (mirar en Administrador de dispositivos)",
-            "default": "COM5"
         }
     ]
 }

@@ -79,6 +79,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
 )
 
-# La telemetría imprime floats con snprintf: newlib-nano los trae apagados
+# El grafico manda floats con snprintf: newlib-nano los trae apagados
 # por defecto y hay que pedirlos al linker.
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)

@@ -18,6 +18,8 @@ typedef struct {
     float integral;
     float limite_out_max;  /* límites físicos del actuador (grados del servo) */
     float limite_out_min;
+    float banda;           /* region de aceptacion: +/- alrededor del setpoint */
+    float d_filtrado;      /* termino D suavizado (promedio con el anterior) */
 } PID_Controller;
 
 /* Carga las ganancias y deja el estado en cero */

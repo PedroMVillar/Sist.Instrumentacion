@@ -21,83 +21,93 @@ El sensor va montado en un extremo de la viga, apuntando a la pelota.
 | V+ (rojo) | 5 V | Si el servo tiembla o la placa se resetea, alimentarlo con una fuente de 5 V aparte |
 | GND (marrón/negro) | GND | **Siempre GND común con la placa**, aunque la fuente sea externa |
 
-### Consola
+### Adaptador USB-UART (para el gráfico)
 
-Nada que cablear: un cable micro-USB común entre la PC y el conector **CN5**
-de la placa (el micro-USB de abajo, que va directo al F407). Al conectarlo,
-con el programa ya grabado, aparece un puerto COM nuevo en el Administrador
-de dispositivos ("Dispositivo serie USB (COMx)"). Quedan los dos cables
-puestos: el mini-USB del ST-LINK (CN1) para grabar y el micro-USB (CN5) para
-la consola.
+| Pin del adaptador | Va a | Nota |
+|---|---|---|
+| RX | `PA2` (TX de la placa) | Por acá llegan las muestras |
+| TX | `PA3` (RX de la placa) | No se usa todavía, se puede dejar sin conectar |
+| GND | GND | **Siempre GND común** |
 
-La misma consola también sale por la UART de PA2/PA3 (115200), por si algún
-día se usa un adaptador USB-serie.
+El adaptador tiene que trabajar con lógica de 3.3 V (si tiene jumper 5V/3V3,
+ponerlo en 3V3). El pin de VCC del adaptador no se conecta.
 
 ## Configuración (ya está en `firmware.ioc`)
 
 | Periférico | Configuración | Para qué |
 |---|---|---|
-| Reloj | HSI + PLL a 96 MHz | Los timers de APB1 reciben 48 MHz; el USB recibe sus 48 MHz del PLL |
+| Reloj | HSI + PLL a 96 MHz | Los timers de APB1 reciben 48 MHz |
 | `TIM3` | PSC `48-1` (tick de 1 µs), canal 4 Input Capture + interrupción | Mide el ancho del eco del HC-SR04 |
+| `USART2` | 115200, 8N1, PA2/PA3 | Manda las muestras al gráfico |
+| `TIM4` | Se configura a mano en `main_balancin.c` (`Grafico_Init`), interrupción cada 50 ms | Marca cuándo mandar una muestra |
 | `TIM2` | Se configura a mano en `main_balancin.c` (`Servo_Init`), canal 2 PWM en PA1 | Pulso del servo |
-| `USB CDC` | USB device en CN5, generado por CubeMX | Consola: aparece como puerto COM en la PC |
-| `USART2` | 115200, 8N1, interrupción de recepción | La misma consola por PA2/PA3 (alternativa) |
 
 ## Compilar y grabar (VS Code)
 
-1. Abrir la carpeta `laboratorio-4-control-PID/` en VS Code (acá mismo: están el firmware, la consola y este instructivo juntos).
+1. Abrir la carpeta `laboratorio-4-control-PID/` en VS Code (acá mismo: están el firmware y este instructivo juntos).
 2. `Ctrl+Shift+P` → "Tasks: Run Task" → **Configurar** (solo la primera vez).
 3. Task **Compilar** (o `Ctrl+Shift+B`).
 4. Conectar el USB mini del ST-LINK (CN1) y correr la task **Grabar en la placa**.
 
-## La consola
+## Gráfico en tiempo real (para calibrar)
 
-Con la placa grabada y el USB conectado:
+Cada 50 ms el `TIM4` interrumpe y la placa manda por la UART una línea con
+el tiempo y la distancia de la pelota al centro, por ejemplo `15350,-2.41`.
+La placa no espera a que la línea termine de salir: `HAL_UART_Transmit_IT`
+la manda sola por interrupción, así el lazo del PID no se frena.
+
+Con la placa grabada y el adaptador conectado:
 
 ```
 pip install pyserial matplotlib        (solo la primera vez)
-python consola/consola.py COM5         (poner el COM que aparezca en tu PC)
+python grafico/grafico.py COM7         (poner el COM del adaptador)
 ```
 
-También hay una task **Consola** en VS Code que hace lo mismo: te pregunta el COM y la abre.
+También está la task **Grafico** en VS Code, que pregunta el COM.
 
-Se abren dos cosas: la terminal, que muestra en vivo la telemetría
-(`modo`, `distancia`, `posición`, `ángulo`, `servo`) y una ventana con el
-**gráfico en tiempo real** de la posición de la pelota respecto del centro.
-Ahí se ve cómo oscila y se va estabilizando cuando el PID controla.
+Se abre una ventana con la posición respecto del centro en los últimos 20
+segundos. Una pelota bien calibrada oscila un par de veces y queda pegada a
+la línea del 0. El gráfico funciona a la vez que el depurador: se puede
+cambiar `kp`, `ki`, `kd` en Live Expressions y ver el efecto en el gráfico.
 
-Lo que escribas en la terminal va a la placa como comando `nombre valor`:
+## Ajustar en vivo (Live Expressions)
 
-| Comando | Qué cambia | Ejemplo |
+Los valores se miran y se cambian con la placa corriendo, desde el depurador
+(Run and Debug en VS Code, panel de variables / Live Expressions). Para
+cambiar uno, se edita su valor ahí mismo, sin recompilar.
+
+| Variable | Qué es | Valor inicial |
 |---|---|---|
-| `modo` | 0 = solo medir, 1 = PID, 2 = prueba de sentido | `modo 1` |
-| `kp` / `ki` / `kd` | las ganancias del PID | `kp 3` |
-| `centro` | distancia del sensor al centro de la viga (cm) | `centro 28.5` |
-| `sentido` | 1 o -1, para qué lado corrige el servo | `sentido -1` |
-| `servo` | pulso con el que la viga queda horizontal (µs) | `servo 1200` |
-| `max` | distancia máxima válida del sensor (cm) | `max 55` |
+| `modo` | 0 = solo medir, 1 = PID, 2 = prueba de sentido | 1 |
+| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID | 1.7 / 0.1 / 0.35 |
+| `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 28.5 |
+| `sentido` | 1 o -1, para qué lado corrige el servo | -1 |
+| `servo_centro_us` | pulso con el que la viga queda horizontal (µs) | 1281 |
+| `banda_cm` | región de aceptación alrededor del centro (cm); 0 = apagada | 1 |
+| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 100 |
+| `distancia_max_cm` | distancia máxima válida del sensor (cm) | 55 |
 
-La placa contesta `ok kp = 3.000` a cada comando.
+Para mirar: `distance_cm` (lectura cruda), `distancia_filtrada_cm` (mediana
+de las últimas 5), `posicion_cm`, `salida_angulo`, `angulo_servo`, `servo_us`.
 
 ## Primera prueba, paso a paso
 
-El programa arranca en **modo 0** (solo mide, viga horizontal) y con los
-valores que ya anduvieron en la maqueta: `servo 1200`, `sentido -1`,
-`centro 28.5`, Kp=3, Ki=0.2, Kd=0.005.
+El programa arranca en **modo 1** (controlando) con los valores que ya
+anduvieron en la maqueta. Si algo no va, poner `modo` en 0 y seguir estos pasos:
 
-1. **Viga horizontal.** Grabar, abrir la consola y mirar la viga: si no
-   queda horizontal, ajustar con `servo 1250`, `servo 1150`... hasta que quede.
-2. **El sensor ve la pelota.** Ponerla en la viga: el LED rojo se apaga y la
-   distancia de la consola tiene que seguirla al moverla con la mano. Si
-   marca cualquier cosa, revisar TRIG/ECHO.
-3. **Verificar el centro.** Con la pelota quieta en el medio, la posición
-   tiene que marcar cerca de 0. Si no, mandar la distancia leída con `centro`.
-4. **Verificar el sentido.** `modo 2` con la pelota cerca del sensor: la viga
+1. **Viga horizontal.** Con `modo` 0 la viga queda horizontal: si no lo está,
+   ajustar `servo_centro_us` de a 50 hasta que la pelota quede quieta.
+2. **El sensor ve la pelota.** Ponerla en la viga: el LED rojo se apaga y
+   `distance_cm` tiene que seguirla al moverla con la mano. Si marca
+   cualquier cosa, revisar TRIG/ECHO.
+3. **Verificar el centro.** Con la pelota quieta en el medio, `posicion_cm`
+   tiene que dar cerca de 0. Si no, poner en `centro_viga_cm` la distancia leída.
+4. **Verificar el sentido.** `modo` 2 con la pelota cerca del sensor: la viga
    se inclina fija y la pelota tiene que rodar **alejándose** del sensor. Si
-   rueda hacia el sensor, cambiar el signo con `sentido 1` (o `-1`). Volver a `modo 0`.
-5. **Controlar.** `modo 1`: debería centrarla. En el gráfico se ve la
-   oscilación achicándose. Si oscila de más o queda corta, tocar `kp`, `ki`,
-   `kd` (procedimiento en [`explicacion.md`](./explicacion.md)).
+   rueda hacia el sensor, cambiar el signo de `sentido`. Volver a `modo` 0.
+5. **Controlar.** `modo` 1: debería centrarla (LED verde dentro de la banda).
+   Si oscila de más o queda corta, tocar `kp`, `ki`, `kd` (procedimiento en
+   [`explicacion.md`](./explicacion.md)).
 6. **Guardar lo encontrado.** Los valores que funcionaron se pasan a los
    valores iniciales de `firmware/app/main_balancin.c` para que queden grabados.
 
