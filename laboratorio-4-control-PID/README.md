@@ -25,4 +25,5 @@ Una bola rueda sobre una viga. Un sensor ultrasónico mide dónde está, un serv
 | [`firmware/`](./firmware) | Proyecto CubeMX + CMake; el programa está en [`firmware/app/`](./firmware/app) |
 | [`firmware/libs/`](./firmware/libs) | `HC_SR04` (del classroom, sin modificar) y `pid` (propia) |
 | [`grafico/`](./grafico) | `grafico.py`: gráfico en tiempo real de la posición de la pelota |
+| [`matlab/`](./matlab) | Identificación de la planta: `identificar_lazo_balancin.m` (ajusta K y zona muerta desde un ensayo de escalón y prueba ganancias), `identificacion_escalon.m` y `GUIA_PID.mlx` (método de sobrepico y tiempo de pico) |
 | [`explicacion.md`](./explicacion.md) | Teoría del PID y cómo sintonizarlo en la maqueta |
