@@ -1,0 +1,238 @@
+% ============================================================
+%  Informe de avance Laboratorio 4 - Control PID (ball and beam)
+%  Compilar con: pdflatex informe_lab4.tex  (dos veces)
+% ============================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noquoting]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm,top=1.9cm,bottom=1.9cm]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc}
+\usepackage[colorlinks=true,urlcolor=blue!55!black]{hyperref}
+
+\setlist[itemize]{topsep=2pt,itemsep=1.5pt,parsep=0pt,leftmargin=1.2em}
+\setlist[enumerate]{topsep=2pt,itemsep=1.5pt,parsep=0pt,leftmargin=1.4em}
+\setlength{\parskip}{3pt}
+\pagestyle{empty}
+
+\titleformat{\section}{\normalsize\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{9pt}{2pt}
+
+% --- estilo de los listados de código ---
+\lstset{
+  language=C,
+  basicstyle=\ttfamily\scriptsize,
+  commentstyle=\color{black!55}\itshape,
+  keywordstyle=\bfseries,
+  showstringspaces=false,
+  tabsize=2,
+  frame=leftline,
+  framerule=0.6pt,
+  rulecolor=\color{black!40},
+  xleftmargin=8pt,
+  aboveskip=4pt,
+  belowskip=2pt,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+           {ñ}{{\~n}}1 {¿}{{?`}}1 {→}{{$\to$}}1
+}
+
+% --- estilo del diagrama ---
+\tikzset{
+  paso/.style={rectangle, rounded corners=3pt, draw=black!60, fill=blue!6,
+               text width=10.2cm, align=left, inner sep=3pt, font=\footnotesize},
+  decision/.style={diamond, aspect=3.5, draw=black!60, fill=orange!12,
+                   align=center, inner sep=0pt, font=\footnotesize},
+  mecanica/.style={rectangle, rounded corners=3pt, draw=black!60, fill=red!8,
+                   text width=3.8cm, align=left, inner sep=3pt, font=\footnotesize},
+  flecha/.style={-{Stealth[length=2.2mm]}, thick, black!70}
+}
+
+\begin{document}
+
+% ------------------------------------------------------------
+\begin{center}
+  {\large\bfseries Control PID de un balancín (ball and beam)}\\[2pt]
+  {\small Laboratorio 4: informe de avance \textbar{} Sistemas Electrónicos de Instrumentación}\\[2pt]
+  {\footnotesize Pedro Villar \quad\textbar\quad 23 de noviembre de 2026}
+\end{center}
+\vspace{-4pt}
+\hrule
+\vspace{4pt}
+
+El objetivo es mantener una pelota de ping pong en el centro de una viga. Un HC-SR04 mide dónde
+está la pelota, un servo inclina la viga y un PID calcula cada 50\,ms cuánto inclinarla. Todo
+corre en una \textbf{STM32F4Discovery}. El PID sigue la implementación de la guía de la
+cátedra.
+
+% ------------------------------------------------------------
+\section*{El lazo principal}
+
+\begin{lstlisting}
+while (1) {
+  uint32_t tiempo_actual = HAL_GetTick();
+
+  if ((tiempo_actual - tiempo_anterior) >= TS_MS) {      // Ts = 50 ms
+    tiempo_anterior = tiempo_actual;
+
+    float posicion_actual = LeerSensorDistancia();       // cm respecto del centro
+
+    if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR) {
+      pid_bola.banda = banda_cm;                      // editable en vivo
+      salida_angulo = PID_Compute(&pid_bola, setpoint_cm,
+                                  posicion_actual);
+    } else {
+      salida_angulo = 0.0f;                           // midiendo o sin pelota:
+      PID_Reset(&pid_bola, posicion_actual);          // viga plana y PID en cero
+    }
+    ActualizarServo(salida_angulo);                 // pide el ángulo, sin saltos
+  }
+
+  Servo_Update(tiempo_actual);  // cada 20 ms acerca el servo (150 grados/s)
+  Update_Leds();                // rojo: sin pelota, verde: centrada
+}
+\end{lstlisting}
+
+Es el mismo esquema no bloqueante de la guía: el \texttt{if} del tiempo decide cuándo corre el
+lazo y nada frena al resto. \texttt{LeerSensorDistancia()} toma el eco de la medición anterior,
+dispara la siguiente y devuelve la mediana de las últimas 5 lecturas, porque el sensor da picos
+falsos. El servo no salta al ángulo que pide el PID: se mueve como mucho 150 grados por segundo,
+así la viga no da golpes. Las variables \texttt{modo}, \texttt{setpoint\_cm}, \texttt{banda\_cm}
+y las ganancias se cambian con la placa andando, desde el depurador.
+
+% ------------------------------------------------------------
+\section*{Callbacks de interrupción}
+
+\begin{lstlisting}
+// TIM3 en Input Capture: llega un flanco del eco del HC-SR04
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+  hcsr04_tim_ic_callback(&distance_sensor, htim);   // la librería mide el ancho del eco
+}
+
+// TIM4 cada 50 ms: manda una muestra por UART para graficar en la PC
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance == TIM4) {
+    // tiempo, posición, setpoint y salida del PID, separados por comas
+    int largo = snprintf(linea_grafico, sizeof(linea_grafico),
+                         "%lu,%.2f,%.2f,%.2f\r\n", (unsigned long)HAL_GetTick(),
+                         posicion_cm, setpoint_cm, salida_angulo);
+    HAL_UART_Transmit_IT(&huart2, (uint8_t *)linea_grafico, (uint16_t)largo);
+  }
+}
+\end{lstlisting}
+
+El primero es el del sensor, igual que en el laboratorio 3. El segundo lo agregué para
+calibrar: cada 50\,ms manda por USART2 una línea con el tiempo, la posición, el setpoint y la
+salida del PID a un adaptador USB-UART. En la PC un script de Python la grafica en tiempo real y
+la guarda en un CSV. Usa \texttt{Transmit\_IT}, así la placa no espera a que salga la línea y
+el lazo no se atrasa.
+
+% ------------------------------------------------------------
+\section*{Lo que me pasó}
+
+Primero calibré la maqueta. El centro de la viga quedó a 33\,cm del sensor y la viga queda
+horizontal con un pulso de 1315\,µs. Ahí apareció el primer dato raro: entre 1240 y 1390\,µs la
+pelota no se mueve para ningún lado. Son unos 13 grados de servo que no hacen nada.
+
+Después probé el PID y me encontré con tres problemas:
+
+\begin{itemize}
+  \item \textbf{El servo temblaba.} Hacía cambios chiquitos todo el tiempo aunque la pelota
+        estuviera quieta. El sensor tiene un ruido de unos 0,4\,cm y la derivada lo divide por
+        Ts, así que lo agranda. Lo resolví suavizando la velocidad (70\,\% del valor anterior
+        y 30\,\% del nuevo), y ese problema quedó resuelto.
+  \item \textbf{La pelota se traba.} Cerca del medio recién empieza a rodar con unos 19 grados
+        de servo. A 37\,cm del sensor se quedó quieta más de un minuto con el servo al tope
+        (35 grados). El brazo del servo inclina muy poco la viga, y por eso tuve que subir el
+        límite de 15 a 35 grados.
+  \item \textbf{Cuando se destraba, se pasa.} La pelota junta fuerza hasta que vence el roce,
+        sale de golpe y cruza el centro con velocidad. Llega al medio, pero tarda muchísimo en
+        quedarse quieta.
+\end{itemize}
+
+Las ganancias que mejor anduvieron fueron Kp 2,5, Ki 0,3 y Kd 0,8, con una banda de 1\,cm
+alrededor del centro. Las saqué a prueba y error, cambiándolas en vivo. No pude aplicar
+Ziegler-Nichols como pide la guía: con tanto roce la pelota nunca oscila de
+forma pareja, se traba y sale a los saltos. Así que no hay una ganancia crítica para medir.
+
+% ------------------------------------------------------------
+\section*{Cómo decidí resolverlo}
+
+Me di cuenta de que estaba ajustando a ojo algo que no había medido. Además, todo
+apunta a que el problema es más mecánico que de sintonía: un PID lineal no puede compensar del
+todo una zona en la que el servo se mueve y la pelota no. Por eso cambié el orden: primero
+medir la planta y después elegir las ganancias.
+
+Para eso dejé el firmware preparado. Simplifiqué el PID (derivada sobre la medida,
+anti-windup y nada más), agregué un setpoint que se puede cambiar en vivo y amplié lo que
+manda la UART. También armé un script de MATLAB que toma el log de un ensayo de escalón y
+hace los pasos del diagrama.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=3mm]
+  \node[paso] (p1) {\textbf{1. Ensayo de escalón en la maqueta.}
+    Ki = 0 y banda = 0. Con la pelota quieta en el centro, el setpoint pasa de 0 a 8\,cm.
+    La UART guarda el log en un CSV.};
+  \node[paso, below=of p1] (p2) {\textbf{2. Primera estimación (método de Chen).}
+    Del sobrepico y el tiempo de pico sale la ganancia K de la planta: cuánto acelera la
+    pelota por cada grado de servo.};
+  \node[paso, below=of p2] (p3) {\textbf{3. Ajuste por simulación.}
+    MATLAB simula el lazo con la misma lógica del firmware (mediana, retardo, derivada
+    suavizada, servo lento) y busca el K y la zona muerta que mejor copian el log.};
+  \node[decision, below=4mm of p3] (d) {¿Zona muerta grande?};
+  \node[mecanica, anchor=west] (m) at ($(d -| p3.east) + (6mm,0)$) {\textbf{Compensarla en el software.}
+    A la salida del PID se le suman los grados de zona muerta, hacia el lado que tiene
+    que ir la pelota.};
+  \node[paso, below=8mm of d] (p4) {\textbf{4. Probar ganancias sobre el modelo.}
+    Se simulan varios Kp y Kd y se eligen los que no oscilan y casi no se pasan.};
+  \node[paso, below=of p4] (p5) {\textbf{5. Validar en la maqueta.}
+    Otro escalón con las ganancias nuevas. La respuesta real tiene que parecerse a la
+    simulada. Recién ahí se sube Ki de a poco y se graban las ganancias.};
+
+  \draw[flecha] (p1) -- (p2);
+  \draw[flecha] (p2) -- (p3);
+  \draw[flecha] (p3) -- (d);
+  \draw[flecha] (d) -- node[above, font=\small]{sí} (m);
+  \draw[flecha] (d) -- node[right, font=\small]{no} (p4);
+  \draw[flecha] (p4) -- (p5);
+  \draw[flecha] (m.south) |- (p4.east);
+\end{tikzpicture}
+\end{figure}
+
+La fórmula de Chen supone un sistema de segundo orden ideal. Mi lazo tiene filtros,
+retardos y un servo con velocidad limitada, así que ese número solo sirve como punto de partida.
+El que cuenta es el del paso 3, porque simula el lazo tal como está programado. Además, ese paso
+mide la zona muerta, que es justamente lo que sospecho que me limita.
+
+% ------------------------------------------------------------
+\section*{Análisis y conclusiones}
+
+Hasta ahora la parte electrónica y de software funciona: la medición no bloquea el lazo, el
+filtro saca los picos del sensor, el servo se mueve sin golpes y puedo ver y guardar todo en
+la PC mientras la placa corre. Lo que todavía no logré es que la pelota se quede quieta en el
+centro de forma estable. La llevo al medio, pero tarda mucho y no siempre se queda.
+
+La conclusión principal es que el límite no está en el código sino en la maqueta. Hay unos 13
+grados de servo en los que la pelota no se mueve y hacen falta casi 19 para que arranque. Con
+eso, cualquier ganancia queda entre trabarse o pasarse. Aprendí que antes de sintonizar un PID
+conviene medir la planta: probar valores a ojo me llevó mucho tiempo sin una razón clara de por
+qué no andaba. La maqueta es fija y no la puedo modificar, así que si la zona muerta es grande
+la tengo que compensar en el software. El próximo paso es hacer el ensayo de escalón, ver cuánto
+da la zona muerta y elegir las ganancias con el modelo, para llegar al final con el lazo
+funcionando.
+
+\vspace{6pt}
+\noindent El script de MATLAB del análisis y el código completo del proyecto (firmware, librería
+del PID y gráfico en Python) están en el repositorio
+\href{https://github.com/PedroMVillar/Sist.Instrumentacion/tree/lab4/laboratorio-4-control-PID}{\texttt{github.com/PedroMVillar/Sist.Instrumentacion}},
+en la rama \texttt{lab4}, carpeta \texttt{laboratorio-4-control-PID}.
+
+\end{document}
