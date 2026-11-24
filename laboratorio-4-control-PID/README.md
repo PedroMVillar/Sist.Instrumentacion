@@ -4,7 +4,7 @@ Una bola rueda sobre una viga. Un sensor ultrasónico mide dónde está, un serv
 
 **Placa:** STM32F4Discovery (F407VG) · **Entorno:** VS Code + CMake (librerías HAL Cube)
 
-> El cableado del sensor y el servo, y los parámetros a ajustar con la maqueta armada, están en [`setup.md`](./setup.md). La teoría del PID y el procedimiento de sintonización están en [`explicacion.md`](./explicacion.md).
+> El cableado del sensor y el servo, y los parámetros a ajustar con la maqueta armada, están en [`setup.md`](./setup.md). La teoría del PID y el procedimiento de sintonización están en [`explicacion.md`](./explicacion.md). Los pasos del ensayo de escalón y la identificación con MATLAB están al final de [`setup.md`](./setup.md#ensayo-de-escalón-e-identificación-con-matlab).
 
 ## Hardware
 
