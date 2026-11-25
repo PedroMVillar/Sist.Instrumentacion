@@ -84,12 +84,11 @@ cambiar uno, se edita su valor ahí mismo, sin recompilar.
 |---|---|---|
 | `modo` | 0 = solo medir, 1 = PID | 1 |
 | `setpoint_cm` | posición pedida respecto del centro (cm); para ensayos de escalón | 0 |
-| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID (las del ensayo de escalón) | 1.5 / 0 / 0.8 |
-| `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 33 |
+| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID (opción A, sin probar en la maqueta) | 4 / 0.1 / 0.5 |
+| `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 27.3 |
 | `sentido` | 1 o -1, para qué lado corrige el servo | -1 |
-| `servo_centro_us` | pulso con el que la viga queda horizontal (µs) | 1315 |
-| `banda_cm` | zona muerta alrededor del centro (cm); 0 = apagada | 0 |
-| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 150 |
+| `servo_centro_us` | pulso con el que la viga queda horizontal (µs), estimado con el modelo | 1592 |
+| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 60 |
 | `distancia_max_cm` | distancia máxima válida del sensor (cm) | 55 |
 
 Para mirar: `distance_cm` (lectura cruda), `distancia_filtrada_cm` (mediana
@@ -97,8 +96,8 @@ de las últimas 5), `posicion_cm`, `salida_angulo`, `angulo_servo`, `servo_us`.
 
 ## Primera prueba, paso a paso
 
-El programa arranca en **modo 1** (controlando) con las ganancias del ensayo
-de escalón. Si algo no va, poner `modo` en 0 y seguir estos pasos:
+El programa arranca en **modo 1** (controlando) con los valores de
+la opción A, que falta probar en la maqueta. Si algo no va, poner `modo` en 0 y seguir estos pasos:
 
 1. **Viga horizontal.** Con `modo` 0 la viga queda horizontal: si no lo está,
    ajustar `servo_centro_us` de a 50 hasta que la pelota quede quieta.
@@ -110,7 +109,7 @@ de escalón. Si algo no va, poner `modo` en 0 y seguir estos pasos:
 4. **Verificar el sentido.** Con `modo` 1, acercar la pelota al sensor: la viga
    tiene que inclinarse para que ruede **alejándose** del sensor. Si la empuja
    hacia el sensor, cambiar el signo de `sentido`.
-5. **Controlar.** `modo` 1: debería centrarla (LED verde dentro de la banda).
+5. **Controlar.** `modo` 1: debería centrarla (LED verde a menos de 1 cm).
    Si oscila de más o queda corta, tocar `kp`, `ki`, `kd` (procedimiento en
    [`explicacion.md`](./explicacion.md)).
 6. **Guardar lo encontrado.** Los valores que funcionaron se pasan a los
@@ -136,10 +135,12 @@ Todos los comandos de terminal se escriben parado en la carpeta
    principio de `main`. Apretar `F5` otra vez para que corra.
    (No hace falta la task **Grabar en la placa**: el debug ya graba.)
 3. En el panel **WATCH** de Run and Debug, con el `+`, agregar:
-   `modo`, `setpoint_cm`, `banda_cm`, `pid_bola`, `posicion_cm`.
-4. Revisar que `pid_bola` tenga `kp = 1.5`, `ki = 0`, `kd = 0.8` y que
-   `banda_cm` sea 0. Si se usan otras ganancias, poner las mismas en la
-   sección 1 del script (`P.Kp`, `P.Ki`, `P.Kd`), si no el modelo sale mal.
+   `modo`, `setpoint_cm`, `pid_bola`, `posicion_cm`.
+4. Poner `pid_bola.ki` en 0 (el script supone eso). Kp y Kd
+   tienen que ser las mismas que en la sección 1 del script (`P.Kp`, `P.Kd`),
+   si no el modelo sale mal. Ojo: con Kp chico (1.5) la salida no supera la
+   zona muerta del servo y la pelota no se mueve; con Kp 3 y Kd 0.8 el
+   escalón de 8 cm anduvo bien.
 
 **Cómo cambiar una variable:** `F6` (pausa) → en WATCH, doble clic sobre el
 valor → escribir el número → `Enter` → `F5` (sigue corriendo). La pausa
@@ -208,6 +209,5 @@ dura un instante; con la placa en pausa no salen datos por la UART.
   3. Recién ahí probar subir `pid_bola.ki` de a poco (0.1, después 0.2) para
      sacar el error final.
   4. Dejar grabadas las ganancias finales: en `firmware/app/main_balancin.c`,
-     cambiar los números de `PID_Init(&pid_bola, 1.5f, 0.0f, 0.8f, ...)` y,
-     si se quiere, `banda_cm = 1.0f`. Después `F5` en Run and Debug para
+     cambiar los números de `PID_Init(&pid_bola, 4.0f, 0.1f, 0.5f, ...)`. Después `F5` en Run and Debug para
      compilar y grabar.

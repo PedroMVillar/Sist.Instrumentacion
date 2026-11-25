@@ -38,8 +38,6 @@ La ecuación de la guía, en su forma estándar:
 
 **Derivada sobre la medida.** El D usa la velocidad de la bola y no la del error. Con el setpoint fijo da lo mismo, pero si el setpoint cambia de golpe (ensayo de escalón) no aparece un golpe en el servo. Esa velocidad se suaviza (70% la anterior y 30% la nueva) porque el sensor tiene ruido de unos 0,4 cm y al dividir por Ts el ruido se agranda.
 
-**Zona muerta.** Si la bola está a menos de `banda_cm` del setpoint se la da por centrada: P no empuja y la integral no acumula. El D sigue frenando.
-
 **Capa de hardware.** El PID no sabe qué sensor ni qué servo hay: solo ve `LeerSensorDistancia()` y `ActualizarServo()`. Si mañana cambia el sensor, el algoritmo no se toca. Es la misma idea de librerías del lab 3.
 
 ## Por qué el lazo corre cada 50 ms (el tiempo de muestreo)

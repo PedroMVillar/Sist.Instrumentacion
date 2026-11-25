@@ -14,6 +14,7 @@
 \usepackage{listings}
 \usepackage{titlesec}
 \usepackage{float}
+\usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc}
 \usepackage[colorlinks=true,urlcolor=blue!55!black]{hyperref}
@@ -133,6 +134,14 @@ calibrar: cada 50\,ms manda por USART2 una línea con el tiempo, la posición, e
 salida del PID a un adaptador USB-UART. En la PC un script de Python la grafica en tiempo real y
 la guarda en un CSV. Usa \texttt{Transmit\_IT}, así la placa no espera a que salga la línea y
 el lazo no se atrasa.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\textwidth]{grafico_en_vivo.png}\\[-2pt]
+{\footnotesize Ventana del gráfico en vivo durante una prueba del PID. La pelota está trabada
+cerca de +6\,cm, se destraba, llega al centro y se queda unos 12\,s entre 0 y +2\,cm. Después se
+va otra vez hacia $-4$\,cm.}
+\end{figure}
 
 % ------------------------------------------------------------
 \section*{Lo que me pasó}

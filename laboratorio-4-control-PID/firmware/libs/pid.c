@@ -22,7 +22,6 @@ void PID_Init(PID_Controller *pid, float kp, float ki, float kd,
     pid->ts = ts;
     pid->limite_out_max = max;
     pid->limite_out_min = min;
-    pid->banda = 0.0f;
     PID_Reset(pid, 0.0f);
 }
 
@@ -40,12 +39,6 @@ float PID_Compute(PID_Controller *pid, float setpoint, float medida_actual) {
     pid->medida_previa = medida_actual;
     pid->vel_filtrada = ALFA_VEL * pid->vel_filtrada + (1.0f - ALFA_VEL) * velocidad;
     float d_term = -pid->kd * pid->vel_filtrada;
-
-    /* Zona muerta: dentro de +/- banda se da la bola por centrada.
-     * P no empuja y la integral no acumula; la derivada sigue frenando. */
-    if (error <= pid->banda && error >= -pid->banda) {
-        error = 0.0f;
-    }
 
     /* Proporcional */
     float p_term = pid->kp * error;

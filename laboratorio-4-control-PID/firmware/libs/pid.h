@@ -23,7 +23,6 @@ typedef struct {
     float ts;              /* tiempo de muestreo [s] */
     float limite_out_max;  /* limites fisicos del actuador [grados] */
     float limite_out_min;
-    float banda;           /* zona muerta del error: +/- cm alrededor del setpoint (0 = apagada) */
     float integral;        /* acumulador de la accion I, ya multiplicado por ki [grados] */
     float medida_previa;   /* para derivar la medida [cm] */
     float vel_filtrada;    /* velocidad de la bola suavizada [cm/s] */

@@ -7,7 +7,7 @@
  * Valores editables en Live Expressions mientras corre:
  *   modo (0 = solo medir, servo a 0 grados; 1 = PID),
  *   setpoint_cm (posicion pedida respecto del centro; para ensayos de escalon),
- *   centro_viga_cm, banda_cm,
+ *   centro_viga_cm,
  *   pid_bola.kp / pid_bola.ki / pid_bola.kd, servo_centro_us, sentido.
  *
  * Grafico por UART (agregado): cada ENVIO_MS el TIM4 interrumpe y manda por
@@ -40,13 +40,14 @@
 /* ---------- Ajustes (editables en Live Expressions) ---------- */
 volatile uint32_t modo = 1;              /* 0 = medir, 1 = controlar */
 volatile float setpoint_cm = 0.0f;       /* posicion pedida respecto del centro de la viga (0 = centro) */
-volatile float centro_viga_cm = 33.0f;   /* medio de NUESTRA viga: la pelota 2 cm antes del medio marca 31 cm (2026-11-20) */
+volatile float centro_viga_cm = 27.3f;   /* medio real de la viga: la pelota marca 3.7 cm contra el sensor y 50.8 cm en la otra punta (2026-11-24) */
 volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
-volatile int32_t servo_centro_us = 1315; /* viga horizontal en NUESTRA maqueta (2026-11-20): debajo de 1240 la pelota
-                                            se aleja del sensor, arriba de 1390 va hacia el sensor; 1315 es el medio */
+volatile int32_t servo_centro_us = 1592; /* opcion A del modelo, SIN PROBAR en la maqueta (antes 1525). Medido antes: viga horizontal (2026-11-24): la pelota quieta recien se aleja del sensor
+                                            con 1350 o menos y recien va hacia el sensor con 1700 o mas; 1525 es el
+                                            medio, asi los +/-35 grados quedan parejos para los dos lados */
 volatile float sentido = -1.0f;          /* -1 comprobado en esta maqueta */
-volatile float banda_cm = 0.0f;          /* zona muerta: +/- cm alrededor del setpoint; 0 = apagada (asi para el ensayo de escalon) */
-volatile float velocidad_servo = 150.0f; /* grados/s del servo; 0 = de golpe; menos = mas lento (con 60 llegaba tarde y oscilaba) */
+volatile float velocidad_servo = 60.0f;  /* grados/s del servo; 0 = de golpe; menos = mas lento. Con 150 el ruido del sensor
+                                            hacia que el servo diera golpecitos que sacaban la pelota del centro */
 /* ---------- Valores para mirar ---------- */
 volatile float distance_cm = 0.0f;   /* ultima lectura cruda del sensor */
 volatile float posicion_cm = 0.0f;   /* posicion respecto del centro (filtrada) */
@@ -258,7 +259,7 @@ float LeerSensorDistancia(void)
 static void Update_Leds(void)
 {
     bool sin_pelota = fallas_seguidas >= FALLAS_PARA_CENTRAR;
-    bool centrada = !sin_pelota && posicion_cm <= banda_cm && posicion_cm >= -banda_cm;
+    bool centrada = !sin_pelota && posicion_cm <= 1.0f && posicion_cm >= -1.0f; /* +/- 1 cm */
 
     HAL_GPIO_WritePin(GPIOD, LD5_Pin, sin_pelota ? GPIO_PIN_SET : GPIO_PIN_RESET); /* rojo */
     HAL_GPIO_WritePin(GPIOD, LD4_Pin, centrada ? GPIO_PIN_SET : GPIO_PIN_RESET);   /* verde */
@@ -283,15 +284,12 @@ int main(void)
     distance_sensor.Trig_Pin = GPIO_PIN_0;
     hcsr04_init(&distance_sensor);
 
-    /* Ganancias para el ENSAYO DE ESCALON (2026-11-23): Kp=1.5, Ki=0, Kd=0.8.
-     * Tienen que ser iguales a las de la seccion 1 de matlab/identificar_lazo_balancin.m.
-     * Antes, a prueba y error, se usaba Kp=2.5, Ki=0.3, Kd=0.8 con banda de 1 cm.
-     * Despues del ensayo se reemplazan por las que salgan del modelo.
-     * En esta maqueta el brazo del servo inclina poco la viga, por eso hacen
-     * falta mas ganancia y mas recorrido que en la del companero
-     * (Kp=1.7, Ki=0.1, Kd=0.35 con +/-20 grados). El PDF usa Kp=1.5, Ki=0.2, Kd=0.05.
-     * Limites +/- LIMITE_GRADOS. Ts = 0.05 s = TS_MS. */
-    PID_Init(&pid_bola, 1.5f, 0.0f, 0.8f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
+    /* Opcion A del modelo (horizontal 1592): Kp=4, Ki=0.1, Kd=0.5. Salio de la
+     * simulacion y FALTA PROBARLA en la maqueta.
+     * Opcion B (horizontal 1525): Kp=4, Ki=0.8, Kd=0.5, tampoco probada.
+     * Anterior (horizontal 1525): Kp=3, Ki=0.2, Kd=1.5.
+     * El PDF usa Kp=1.5, Ki=0.2, Kd=0.05. Limites +/- LIMITE_GRADOS. Ts = 0.05 s = TS_MS. */
+    PID_Init(&pid_bola, 4.0f, 0.1f, 0.5f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
 
     Grafico_Init();        /* grafico: desde aca TIM4 manda una muestra cada ENVIO_MS */
 
@@ -310,7 +308,6 @@ int main(void)
 
             if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR)
             {
-                pid_bola.banda = banda_cm; /* zona muerta, editable en vivo */
                 salida_angulo = PID_Compute(&pid_bola, setpoint_cm, posicion_actual);
             }
             else
