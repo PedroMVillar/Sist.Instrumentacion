@@ -36,7 +36,9 @@ La ecuación de la guía, en su forma estándar:
 
 **Anti-windup.** El servo tiene un límite de grados. Si la bola queda lejos un rato, la integral acumula un error que el servo no puede corregir, y cuando la bola al fin cruza el centro toda esa acumulación tarda muchísimo en descargarse. Por eso, si la salida ya está al tope y el error empuja hacia ese mismo tope, la integral no acumula. Además la integral se guarda ya multiplicada por `ki` (en grados), así se puede cambiar `ki` en vivo sin que la salida pegue un salto.
 
-**Derivada sobre la medida.** El D usa la velocidad de la bola y no la del error. Con el setpoint fijo da lo mismo, pero si el setpoint cambia de golpe (ensayo de escalón) no aparece un golpe en el servo. Esa velocidad se suaviza (70% la anterior y 30% la nueva) porque el sensor tiene ruido de unos 0,4 cm y al dividir por Ts el ruido se agranda.
+**Derivada sobre la medida.** El D usa la velocidad de la bola y no la del error. Con el setpoint fijo da lo mismo, pero si el setpoint cambia de golpe (ensayo de escalón) no aparece un golpe en el servo. Esa velocidad se suaviza (85% la anterior y 15% la nueva, `alfa_vel`) porque el sensor tiene ruido de unos 0,4 cm y al dividir por Ts el ruido se agranda.
+
+**Banda de 1 cm y empuje (en `main_balancin.c`).** El PID puro no alcanzó: la pelota se traba por el roce y el ruido del sensor hace que el servo dé golpecitos. Por eso se agregaron dos cosas. Si la pelota está a menos de 1 cm del setpoint, el PID ve error cero y deja de corregir (el D sigue frenando). Si la pelota está quieta fuera de esa banda, se suma un empuje que crece 10 grados por segundo hacia el setpoint, hasta 12 grados, hasta que se despega. Cuando rueda, el empuje se borra rápido. Por esto el Ki quedó chico (0,05): con Ki alto la integral se carga mientras la pelota está trabada y al soltarse la dispara.
 
 **Capa de hardware.** El PID no sabe qué sensor ni qué servo hay: solo ve `LeerSensorDistancia()` y `ActualizarServo()`. Si mañana cambia el sensor, el algoritmo no se toca. Es la misma idea de librerías del lab 3.
 

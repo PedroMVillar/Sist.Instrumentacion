@@ -26,8 +26,8 @@
 /* Ts: el PDF recomienda 20 a 50 ms. Se usa 50 ms porque el HC-SR04 necesita
  * tiempo entre disparos (los ecos viejos rebotan) y cada medida usa el periodo. */
 #define TS_MS                50U
-#define LIMITE_GRADOS        35.0f /* +/- 35 grados. En nuestra maqueta la viga se inclina poco:
-                                      cerca del medio la pelota recien rueda con ~19 grados (2026-11-20). */
+#define LIMITE_GRADOS        20.0f /* +/- 20 grados. Con 35 los movimientos eran muy bruscos para la maqueta
+                                      (2026-11-25). Cerca del medio la pelota recien rueda con ~19 grados (2026-11-20). */
 #define US_POR_GRADO         11.1f /* servo tipico: 1000 us para 90 grados */
 #define FALLAS_PARA_CENTRAR  5U
 #define FILTRO_N             5U    /* mediana de las ultimas 5 lecturas (250 ms) */
@@ -38,16 +38,21 @@
                                       1: "tiempo_ms,posicion_cm,setpoint_cm,salida_grados"
                                          (para identificar el lazo con los ensayos de escalon) */
 /* ---------- Ajustes (editables en Live Expressions) ---------- */
-volatile uint32_t modo = 1;              /* 0 = medir, 1 = controlar */
+volatile uint32_t modo = 0U;             /* 0 = medir, 1 = controlar. Arranca apagado por seguridad */
 volatile float setpoint_cm = 0.0f;       /* posicion pedida respecto del centro de la viga (0 = centro) */
 volatile float centro_viga_cm = 27.3f;   /* medio real de la viga: la pelota marca 3.7 cm contra el sensor y 50.8 cm en la otra punta (2026-11-24) */
 volatile float distancia_max_cm = 55.0f; /* punta lejana medida: 50.5 cm */
-volatile int32_t servo_centro_us = 1592; /* opcion A del modelo, SIN PROBAR en la maqueta (antes 1525). Medido antes: viga horizontal (2026-11-24): la pelota quieta recien se aleja del sensor
-                                            con 1350 o menos y recien va hacia el sensor con 1700 o mas; 1525 es el
-                                            medio, asi los +/-35 grados quedan parejos para los dos lados */
+volatile int32_t servo_centro_us = 1580; /* viga horizontal, elegido probando en la maqueta (2026-11-25).
+                                            Antes 1525: la pelota quieta recien se aleja del sensor con 1350 o menos
+                                            y recien va hacia el sensor con 1700 o mas (2026-11-24) */
+volatile float banda_cm = 1.0f;          /* a menos de esto del setpoint no se corrige mas (evita golpes por el ruido); 0 = apagada */
+volatile float rampa_empuje = 10.0f;     /* grados por segundo que crece el empuje si la pelota esta trabada; 0 = apagado */
+volatile float empuje_max = 12.0f;       /* tope del empuje (grados) */
+volatile float vel_quieta_cms = 2.0f;    /* mas lenta que esto = quieta (cm/s) */
+volatile float empuje = 0.0f;            /* para mirar: empuje actual (grados) */
 volatile float sentido = -1.0f;          /* -1 comprobado en esta maqueta */
-volatile float velocidad_servo = 60.0f;  /* grados/s del servo; 0 = de golpe; menos = mas lento. Con 150 el ruido del sensor
-                                            hacia que el servo diera golpecitos que sacaban la pelota del centro */
+volatile float velocidad_servo = 60.0f;  /* grados/s del servo; 0 = de golpe; menos = mas lento. Con 150 y 300
+                                            los movimientos eran muy bruscos y el ruido del sensor daba golpecitos */
 /* ---------- Valores para mirar ---------- */
 volatile float distance_cm = 0.0f;   /* ultima lectura cruda del sensor */
 volatile float posicion_cm = 0.0f;   /* posicion respecto del centro (filtrada) */
@@ -284,12 +289,11 @@ int main(void)
     distance_sensor.Trig_Pin = GPIO_PIN_0;
     hcsr04_init(&distance_sensor);
 
-    /* Opcion A del modelo (horizontal 1592): Kp=4, Ki=0.1, Kd=0.5. Salio de la
-     * simulacion y FALTA PROBARLA en la maqueta.
-     * Opcion B (horizontal 1525): Kp=4, Ki=0.8, Kd=0.5, tampoco probada.
-     * Anterior (horizontal 1525): Kp=3, Ki=0.2, Kd=1.5.
+    /* Elegidas en la maqueta (2026-11-25): Kp=1.5, Ki=0.05, Kd=2, con servo a
+     * 60 grados/s, +/-20 grados, horizontal 1580, banda de 1 cm y empuje en rampa.
+     * Con Ki alto (0.4) se carga mientras esta trabada y al soltarse se dispara.
      * El PDF usa Kp=1.5, Ki=0.2, Kd=0.05. Limites +/- LIMITE_GRADOS. Ts = 0.05 s = TS_MS. */
-    PID_Init(&pid_bola, 4.0f, 0.1f, 0.5f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
+    PID_Init(&pid_bola, 1.5f, 0.05f, 2.0f, TS_MS / 1000.0f, LIMITE_GRADOS, -LIMITE_GRADOS);
 
     Grafico_Init();        /* grafico: desde aca TIM4 manda una muestra cada ENVIO_MS */
 
@@ -308,12 +312,34 @@ int main(void)
 
             if (modo == 1U && fallas_seguidas < FALLAS_PARA_CENTRAR)
             {
-                salida_angulo = PID_Compute(&pid_bola, setpoint_cm, posicion_actual);
+                float error = setpoint_cm - posicion_actual;
+                bool en_banda = (error < banda_cm) && (error > -banda_cm);
+
+                /* En la banda el PID ve error cero; el D sigue frenando. */
+                float objetivo = en_banda ? posicion_actual : setpoint_cm;
+                salida_angulo = PID_Compute(&pid_bola, objetivo, posicion_actual);
+
+                /* Roce: si la pelota esta trabada fuera de la banda, el empuje crece
+                 * de a poco hacia el setpoint hasta despegarla. Cuando rueda o llega
+                 * a la banda, se borra rapido. */
+                bool quieta = (pid_bola.vel_filtrada < vel_quieta_cms) &&
+                              (pid_bola.vel_filtrada > -vel_quieta_cms);
+                if (quieta && !en_banda) {
+                    if (error * empuje < 0.0f) empuje = 0.0f; /* cambio de lado */
+                    float paso = rampa_empuje * TS_MS / 1000.0f;
+                    empuje += (error > 0.0f) ? paso : -paso;
+                    if (empuje > empuje_max) empuje = empuje_max;
+                    if (empuje < -empuje_max) empuje = -empuje_max;
+                } else {
+                    empuje *= 0.5f;
+                }
+                salida_angulo += empuje;
             }
             else
             {
                 /* Midiendo, o sin ver la pelota: viga horizontal y PID reiniciado. */
                 salida_angulo = 0.0f;
+                empuje = 0.0f;
                 PID_Reset(&pid_bola, posicion_actual);
             }
             ActualizarServo(salida_angulo);

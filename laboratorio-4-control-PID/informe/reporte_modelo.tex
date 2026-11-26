@@ -126,6 +126,11 @@ Anterior & 1525 µs & 3 / 0,2 / 1,5 & 74\,\% & 51\,\%\\ \hline
 \end{center}
 
 \section{Conclusión}
-Elijo la opción A porque anda bien con los dos modelos con roce. Es un resultado de simulación y todavía no la probé en la maqueta. Los riesgos son que el modelo predice poco, que los 1592~µs salieron del primer ajuste y que Kd 0,5 es el valor más chico de la búsqueda, bastante menor al que venía usando. El próximo paso es repetir los escalones con la opción A y comparar.
+En simulación elegí la opción A porque andaba bien con los dos modelos con roce. Los riesgos eran que el modelo predice poco, que los 1592~µs salieron del primer ajuste y que Kd 0,5 era el valor más chico de la búsqueda.
+
+\section{Qué pasó en la maqueta (25 de noviembre)}
+La opción A falló: la pelota iba de punta a punta, unos 24~cm para cada lado. Con el PID puro y el servo limitado a $\pm 20$ grados y 60 grados/s, lo mejor fue 1,5 / 0,2 / 1,5, que sostenía el centro pero se trababa cerca de +3,7~cm. Volví a agregar una banda de 1~cm y un empuje que crece de a poco si la pelota está trabada. Con eso quedé en 1,5 / 0,05 / 2 y horizontal 1580~µs.
+
+En una pasada por setpoints de $-8$ a $+8$~cm, del lado lejano (+4 y +8) la pelota quedó dentro de 1~cm entre el 91 y el 100\,\% del tiempo. En 0, $-4$ y $-8$ osciló de 1 a 2~cm. Nunca se fue a las puntas. El modelo sirvió para entender la maqueta, pero las ganancias finales salieron de probar.
 
 \end{document}

@@ -82,22 +82,29 @@ cambiar uno, se edita su valor ahí mismo, sin recompilar.
 
 | Variable | Qué es | Valor inicial |
 |---|---|---|
-| `modo` | 0 = solo medir, 1 = PID | 1 |
+| `modo` | 0 = solo medir, 1 = PID | 0 |
 | `setpoint_cm` | posición pedida respecto del centro (cm); para ensayos de escalón | 0 |
-| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID (opción A, sin probar en la maqueta) | 4 / 0.1 / 0.5 |
+| `pid_bola.kp` / `.ki` / `.kd` | ganancias del PID (elegidas en la maqueta el 25/11) | 1.5 / 0.05 / 2 |
 | `centro_viga_cm` | distancia del sensor al centro de la viga (cm) | 27.3 |
 | `sentido` | 1 o -1, para qué lado corrige el servo | -1 |
-| `servo_centro_us` | pulso con el que la viga queda horizontal (µs), estimado con el modelo | 1592 |
-| `velocidad_servo` | grados por segundo del servo; 0 = de golpe | 60 |
+| `servo_centro_us` | pulso con el que la viga queda horizontal (µs), elegido probando | 1580 |
+| `velocidad_servo` | grados por segundo del servo; 0 = de golpe. Más rápido fue muy brusco | 60 |
+| `banda_cm` | a menos de esto del setpoint el PID no corrige más; 0 = apagada | 1 |
+| `rampa_empuje` | grados por segundo que crece el empuje si la pelota está trabada; 0 = apagado | 10 |
+| `empuje_max` | tope del empuje (grados) | 12 |
+| `vel_quieta_cms` | más lenta que esto se considera quieta (cm/s) | 2 |
+| `alfa_vel` | suavizado de la velocidad para el D (cerca de 1 = más suave) | 0.85 |
 | `distancia_max_cm` | distancia máxima válida del sensor (cm) | 55 |
 
 Para mirar: `distance_cm` (lectura cruda), `distancia_filtrada_cm` (mediana
-de las últimas 5), `posicion_cm`, `salida_angulo`, `angulo_servo`, `servo_us`.
+de las últimas 5), `posicion_cm`, `salida_angulo`, `angulo_servo`, `servo_us`, `empuje`.
+
+El servo está limitado a ±20° (`LIMITE_GRADOS`). Con ±35° los movimientos eran muy bruscos para la maqueta.
 
 ## Primera prueba, paso a paso
 
-El programa arranca en **modo 1** (controlando) con los valores de
-la opción A, que falta probar en la maqueta. Si algo no va, poner `modo` en 0 y seguir estos pasos:
+El programa arranca en **modo 0** (viga horizontal, sin controlar) por seguridad. Con la pelota
+cerca del medio, poner `modo` en 1. Si algo no va, volver `modo` a 0 y seguir estos pasos:
 
 1. **Viga horizontal.** Con `modo` 0 la viga queda horizontal: si no lo está,
    ajustar `servo_centro_us` de a 50 hasta que la pelota quede quieta.
@@ -209,5 +216,5 @@ dura un instante; con la placa en pausa no salen datos por la UART.
   3. Recién ahí probar subir `pid_bola.ki` de a poco (0.1, después 0.2) para
      sacar el error final.
   4. Dejar grabadas las ganancias finales: en `firmware/app/main_balancin.c`,
-     cambiar los números de `PID_Init(&pid_bola, 4.0f, 0.1f, 0.5f, ...)`. Después `F5` en Run and Debug para
+     cambiar los números de `PID_Init(&pid_bola, 1.5f, 0.05f, 2.0f, ...)`. Después `F5` en Run and Debug para
      compilar y grabar.

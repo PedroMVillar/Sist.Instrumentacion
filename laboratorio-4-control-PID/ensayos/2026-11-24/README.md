@@ -80,7 +80,7 @@ Regla agregada en `main_balancin.c`: si la pelota está trabada fuera de la band
 | `15_final_A_ensayo_largo` | A, escalones a -6, 0, +5, 0 | 20 s quieta en 0 dentro de 1 cm. Los escalones se pasan hasta 8 cm y del lado lejano (+5) oscila más. Dentro de 1 cm en los últimos segundos de cada tramo: 25 % en -6, 50 % en 0, 14 % en +5 y 7 % en 0 |
 | `16_final_A_quieta_40s` | A, quieta en 0 | Casi todo el tiempo dentro de 1 cm, con salidas chicas de hasta 1.6 cm |
 
-El empujón y la banda se sacaron después del firmware para dejar un PID puro.
+El empujón y la banda se sacaron después del firmware para dejar un PID puro. El 25/11 volvieron, en otra forma (empuje que crece de a poco).
 
 ## 5. Modelo físico (`modelo/`)
 
@@ -112,13 +112,13 @@ Dentro de 1 cm al final de cada tramo, con los modelos verificados:
 
 | Opción | Horizontal | Kp / Ki / Kd | M2 | M3 |
 |---|---|---|---|---|
-| **A** (en el firmware) | 1592 | 4 / 0.1 / 0.5 | 100 % | 100 % |
+| **A** | 1592 | 4 / 0.1 / 0.5 | 100 % | 100 % |
 | B | 1525 | 4 / 0.8 / 0.5 | 100 % | 62 % |
 | Anterior | 1525 | 3 / 0.2 / 1.5 | 74 % | 51 % |
 | 14a sin el empujón | 1525 | 2 / 0.1 / 1.5 | 32 % | 68 % |
 
 La búsqueda probó 150 combinaciones con el M2 del segundo intento (`busqueda_*.json`). Kd 0.5 es el mínimo
-probado, así que el óptimo puede estar más abajo. **A y B no se probaron en la maqueta.**
+probado, así que el óptimo puede estar más abajo. **La opción A se probó el 25/11 y falló**: la pelota iba de punta a punta (±24 cm). El ajuste final está en [`../2026-11-25/README.md`](../2026-11-25/README.md).
 
 ## Scripts
 

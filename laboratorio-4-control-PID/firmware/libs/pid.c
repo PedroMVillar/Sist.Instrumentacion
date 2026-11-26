@@ -12,7 +12,7 @@
  *    es simple: no integrar si la salida esta al tope empujando hacia el tope.
  */
 
-#define ALFA_VEL 0.7f   /* peso del valor anterior en el suavizado de la velocidad */
+volatile float alfa_vel = 0.85f; /* suavizado de la velocidad para el D: cerca de 1 = mas suave pero mas lento; editable en vivo */
 
 void PID_Init(PID_Controller *pid, float kp, float ki, float kd,
               float ts, float max, float min) {
@@ -37,7 +37,7 @@ float PID_Compute(PID_Controller *pid, float setpoint, float medida_actual) {
     /* Derivada: velocidad de la bola, suavizada. */
     float velocidad = (medida_actual - pid->medida_previa) / pid->ts;
     pid->medida_previa = medida_actual;
-    pid->vel_filtrada = ALFA_VEL * pid->vel_filtrada + (1.0f - ALFA_VEL) * velocidad;
+    pid->vel_filtrada = alfa_vel * pid->vel_filtrada + (1.0f - alfa_vel) * velocidad;
     float d_term = -pid->kd * pid->vel_filtrada;
 
     /* Proporcional */
