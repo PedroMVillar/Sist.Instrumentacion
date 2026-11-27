@@ -30,6 +30,10 @@ Material de la cursada 2026: apuntes de la cátedra, bibliografía y los laborat
 |---|---|
 | [`01-intro-sistemas-embebidos/`](./teoria/01-intro-sistemas-embebidos) | Presentación de la cátedra y *Embedded Market Study* 2023 |
 | [`02-fpgas/`](./teoria/02-fpgas) | Presentación de introducción a FPGAs y tutorial de FPGA, SystemVerilog y Vivado |
+| [`03-control-pid/`](./teoria/03-control-pid) | Clase de controlador PID (acciones P, I y D, Ti y Td) |
+| [`04-conversores-ad/`](./teoria/04-conversores-ad) | Clase de conversores A/D: sample & hold, Nyquist, aliasing, simple y doble rampa, SAR y flash |
+
+Resumen para defender el lab 4 con estas dos clases, preguntas y videos: [`laboratorio-4-control-PID/resumen_defensa.md`](./laboratorio-4-control-PID/resumen_defensa.md).
 
 ## Bibliografía
 
@@ -62,9 +66,13 @@ Sistemas Electronicos de Instrumentacion/
 │   ├── 01-intro-sistemas-embebidos/
 │   │   ├── introduccion-sistemas-embebidos-2026.pdf
 │   │   └── embedded-market-study-2023.pdf
-│   └── 02-fpgas/
-│       ├── presentacion-intro-fpga.pdf
-│       └── iniciacion-fpga-systemverilog-vivado.pdf
+│   ├── 02-fpgas/
+│   │   ├── presentacion-intro-fpga.pdf
+│   │   └── iniciacion-fpga-systemverilog-vivado.pdf
+│   ├── 03-control-pid/
+│   │   └── pid-basics.pdf
+│   └── 04-conversores-ad/
+│       └── conversores-analogico-digitales.pdf
 ├── laboratorio-1-frecuencimetro-fpga/
 │   ├── README.md
 │   ├── consigna/

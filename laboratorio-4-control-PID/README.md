@@ -29,3 +29,4 @@ Una bola rueda sobre una viga. Un sensor ultrasónico mide dónde está, un serv
 | [`ensayos/`](./ensayos) | Ensayos en la maqueta: [`2026-11-24`](./ensayos/2026-11-24/README.md) (modelo físico) y [`2026-11-25`](./ensayos/2026-11-25/README.md) (ajuste final y setpoints) |
 | [`informe/`](./informe) | Informe de avance (`informe_lab4.pdf`) y reporte del modelo (`reporte_modelo.pdf`) |
 | [`explicacion.md`](./explicacion.md) | Teoría del PID y cómo sintonizarlo en la maqueta |
+| [`resumen_defensa.md`](./resumen_defensa.md) | Resumen para el final: PID, planta, sensor, servo, muestreo y conversores A/D, con preguntas y videos |

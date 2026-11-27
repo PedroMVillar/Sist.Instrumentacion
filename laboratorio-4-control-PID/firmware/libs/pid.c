@@ -6,7 +6,7 @@
  *    mismo, pero si el setpoint salta (ensayo de escalon) no genera un golpe
  *    de derivada.
  * 2. Velocidad suavizada: el sensor ultrasonico tiene ruido de ~0.4 cm y al
- *    dividir por ts se amplifica. Se promedia 70% anterior + 30% nueva.
+ *    dividir por ts se amplifica. Se promedia 85% anterior + 15% nueva (alfa_vel).
  * 3. La integral se guarda ya multiplicada por ki (en grados). Asi se puede
  *    cambiar ki en vivo sin que la integral pegue un salto, y el anti-windup
  *    es simple: no integrar si la salida esta al tope empujando hacia el tope.
